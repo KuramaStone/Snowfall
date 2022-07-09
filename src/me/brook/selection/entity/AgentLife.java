@@ -7,13 +7,10 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map.Entry;
 
-import org.neuroph.core.transfer.RectifiedLinear;
-import org.neuroph.core.transfer.Tanh;
-
 import me.brook.neat.GeneticCarrier;
 import me.brook.neat.network.NeatNetwork;
-import me.brook.neat.network.Phenotype;
 import me.brook.neat.network.NeatNetwork.NeatTransferFunction;
+import me.brook.neat.network.Phenotype;
 import me.brook.neat.randomizer.AsexualReproductionRandomizer;
 import me.brook.neat.species.Species;
 import me.brook.selection.World;
