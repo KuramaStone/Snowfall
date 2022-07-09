@@ -1,0 +1,112 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+	<groupId>Snowfall</groupId>
+	<artifactId>Snowfall</artifactId>
+	<version>0.0.1-SNAPSHOT</version>
+	<build>
+		<sourceDirectory>src</sourceDirectory>
+		<plugins>
+			<plugin>
+				<artifactId>maven-compiler-plugin</artifactId>
+				<version>3.8.1</version>
+				<configuration>
+					<release>15</release>
+				</configuration>
+			</plugin>
+			<!-- any other plugins -->
+			<plugin>
+				<artifactId>maven-assembly-plugin</artifactId>
+				<executions>
+					<execution>
+						<phase>package</phase>
+						<goals>
+							<goal>single</goal>
+						</goals>
+					</execution>
+				</executions>
+				<configuration>
+					<archive>
+						<manifest>
+							<addClasspath>true</addClasspath>
+							<classpathPrefix>lib/</classpathPrefix>
+							<mainClass>me.brook.selection.Engine</mainClass>
+						</manifest>
+					</archive>
+					<descriptorRefs>
+						<descriptorRef>jar-with-dependencies</descriptorRef>
+					</descriptorRefs>
+				</configuration>
+			</plugin>
+		</plugins>
+
+		<resources>
+			<resource>
+				<directory>${project.basedir}</directory>
+				<includes>
+					<include>**/*.png</include>
+					<include>**/*.cu</include>
+					<include>**/*.ptx</include>
+					<include>**/*.glsl</include>
+				</includes>
+			</resource>
+		</resources>
+	</build>
+
+	<dependencies>
+		<!-- https://mvnrepository.com/artifact/net.java.dev.jna/jna-platform -->
+		<dependency>
+			<groupId>net.java.dev.jna</groupId>
+			<artifactId>jna-platform</artifactId>
+			<version>5.11.0</version>
+		</dependency>
+		<dependency>
+			<groupId>me.brook.BNeatworks</groupId>
+			<artifactId>BNeatworks</artifactId>
+			<version>0.0.1-SNAPSHOT</version>
+		</dependency>
+
+		<!-- libgdx -->
+		<!-- https://mvnrepository.com/artifact/com.badlogicgames.gdx/gdx -->
+		<dependency>
+			<groupId>com.badlogicgames.gdx</groupId>
+			<artifactId>gdx</artifactId>
+			<version>1.11.0</version>
+		</dependency>
+		<dependency>
+			<groupId>com.badlogicgames.gdx</groupId>
+			<artifactId>gdx-backend-lwjgl3</artifactId>
+			<version>1.11.0</version>
+		</dependency>
+		<dependency>
+			<groupId>com.badlogicgames.gdx</groupId>
+			<artifactId>gdx-platform</artifactId>
+			<version>1.11.0</version>
+			<classifier>natives-desktop</classifier>
+		</dependency>
+		<dependency>
+			<groupId>org.dyn4j</groupId>
+			<artifactId>dyn4j</artifactId>
+			<version>4.2.0</version>
+		</dependency>
+
+		<!-- https://mvnrepository.com/artifact/org.jcuda/jcuda -->
+		<dependency>
+			<groupId>org.jcuda</groupId>
+			<artifactId>jcuda</artifactId>
+			<version>11.6.1</version>
+		</dependency>
+
+		<dependency>
+			<groupId>de.ruedigermoeller</groupId>
+			<artifactId>fst</artifactId>
+			<version>2.56</version>
+		</dependency>
+		<dependency>
+			<groupId>com.googlecode.json-simple</groupId>
+			<artifactId>json-simple</artifactId>
+			<version>1.1.1</version>
+		</dependency>
+
+	</dependencies>
+
+</project>

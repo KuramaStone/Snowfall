@@ -1,0 +1,1 @@
+java -cp "C:\Users\Brookie\Documents\Programming\Eclipse\workspace2021\World Simulation\target\Snowfall-0.0.1-SNAPSHOT-jar-with-dependencies.jar" me.brook.selection.tools.cuda.CudaManager
