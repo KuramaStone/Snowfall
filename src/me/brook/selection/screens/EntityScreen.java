@@ -78,11 +78,11 @@ public class EntityScreen extends DisplayScreen {
 		batch.draw(display.berrySprite, (float) (bl.x), (float) (bl.y),
 				(float) bounds.getWidth(), (float) bounds.getHeight());
 
-		// if(display.lastShadowTexture != null) {
-		// batch.setShader(worldShader);
-		// batch.draw(display.lastShadowTexture, (float) (bl.x), (float) (bl.y),
-		// (float) bounds.getWidth(), (float) bounds.getHeight());
-		// }
+//		if(display.lastShadowTexture != null) {
+//			batch.setShader(null);
+//			batch.draw(display.lastShadowTexture, (float) (bl.x), (float) (bl.y),
+//					(float) bounds.getWidth(), (float) bounds.getHeight());
+//		}
 
 		batch.setShader(agentShader);
 		// draw agents

@@ -105,7 +105,7 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 	protected transient List<NearbyEntry> lastNearbyEntities;
 	private double lastDistanceToClosestFood = 0;
 
-	private boolean wantsToDigest;
+	private double wantsToDigest;
 
 	private Agent parent;
 
@@ -331,19 +331,27 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 
 	}
 
+	@Override
+	public double getDigestionDifficulty() {
+		return 1;
+	}
+
 	private void digest() {
-		if(wantsToDigest) {
+		if(wantsToDigest > 0) {
 			if(!stomach.isEmpty()) {
 
 				//
 				for(EntityBite e : stomach) {
 					// how much it resists digestion
 					double difficulty = e.getSource().getDigestionDifficulty();
-					double energyDissolved = e.getEnergy() * difficulty * currentMetabolism;
+					double energyDissolved = e.getEnergy() * difficulty * currentMetabolism * wantsToDigest;
 					energyConsumed += energyDissolved * getDietModifier(e.source.isBerry());
 
-					addEnergy(energyDissolved * getDietModifier(e.source.isBerry()));
+					double energyGained = energyDissolved * getDietModifier(false);
+					addEnergy(energyGained);
 					e.energy -= energyDissolved;
+
+					carnGained += energyGained;
 				}
 
 				stomach.removeIf(e -> e.energy <= 1);
@@ -368,6 +376,7 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 		collisionInfo = null;
 		parent = null;
 		parentSpecies = null;
+		stomach = null;
 	}
 
 	private void reproduction() {
@@ -631,6 +640,8 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 	}
 
 	public double getEnergyInStomach() {
+		if(stomach == null)
+			return 0;
 		double energyInStomach = 0;
 		for(EntityBite e : stomach)
 			energyInStomach += e.energy;
@@ -834,8 +845,6 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 		applyForce(this.relative_direction, force);
 		lastForceOutput = force;
 
-		// wantsToDigest = out[3] > 0;
-
 		// only one energy access method can be used at a time
 		wantsToPhotosynthesize = out[3] > 0;
 		wantsToChemosynthesize = out[4] > 0;
@@ -843,6 +852,7 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 		wantsToHeal = out[5];
 		wantsToAttack = out[6] > 0;
 		wantsToHold = out[7] > 0;
+		wantsToDigest = Math.max(out[8], 0);
 
 	}
 
@@ -1532,7 +1542,7 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 					}
 				}
 				else {
-					List<CellCollisionInfo> collision = hitbox.intersectsPoint(near.entity.getLocation(), near.entity.size / 2);
+					List<CellCollisionInfo> collision = hitbox.intersectsPoint(near.entity.getLocation(), (near.entity.size / 2 + Agent.getSizeOfSegment() / 2));
 					if(collision != null && !collision.isEmpty()) {
 						collisionInfo.put(near.entity, collision);
 					}

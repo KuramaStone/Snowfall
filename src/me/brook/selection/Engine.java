@@ -13,6 +13,7 @@ import com.badlogic.gdx.Game;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.backends.lwjgl3.Lwjgl3Application;
 import com.badlogic.gdx.backends.lwjgl3.Lwjgl3ApplicationConfiguration;
+import com.badlogic.gdx.backends.lwjgl3.Lwjgl3WindowAdapter;
 
 import me.brook.selection.LibDisplay.RenderingMode;
 import me.brook.selection.tools.InputDetector;
@@ -211,6 +212,14 @@ public class Engine extends Game {
 		hasDisplay = true;
 		_engine = new Engine(args);
 
+		config.setWindowListener(new Lwjgl3WindowAdapter() {
+			@Override
+			public boolean closeRequested() {
+				_engine.shutdown();
+				return super.closeRequested();
+			}
+		});
+		
 		if(hasDisplay)
 			new Lwjgl3Application(_engine, config);
 		else

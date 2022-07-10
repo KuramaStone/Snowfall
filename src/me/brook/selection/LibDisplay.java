@@ -278,8 +278,7 @@ public class LibDisplay {
 		polybatch.setProjectionMatrix(matrix);
 		polybatch.enableBlending();
 
-		Gdx.gl.glBlendEquation(GL20.GL_FUNC_ADD);
-		polybatch.setBlendFunction(GL20.GL_ONE_MINUS_CONSTANT_COLOR, GL20.GL_ONE_MINUS_CONSTANT_COLOR);
+		polybatch.setBlendFunction(GL20.GL_ONE, GL20.GL_ONE_MINUS_CONSTANT_ALPHA);
 
 		polybatch.begin();
 
@@ -294,7 +293,7 @@ public class LibDisplay {
 
 		Texture texture = new TextureTracker(pix);
 		TextureRegion texRegion = new TextureRegion(texture);
-		polybatch.setColor(0, 0, 0, 0.2f);
+		polybatch.setColor(0, 0, 0, 0.1f);
 
 		for(int i = 0; i < toRender.size(); i++) {
 			Entity entity = toRender.get(i);
@@ -466,9 +465,9 @@ public class LibDisplay {
 						(agent.getTotalEnergyGained() + agent.getEnergyUsed() > 0 ? "+" : "-"), agent.getTotalEnergyGained(),
 						(agent.getEnergyUsed()));
 				double sum = Math.max(1, agent.getTotalEnergyGained());
-				String dietInfo = String.format("Diet: %s : %s : %s", dfdouble.format(agent.getSunGained() / sum),
+				String dietInfo = String.format("Diet: %sphoto : %schems : %scarn", dfdouble.format(agent.getSunGained() / sum),
 						dfdouble.format(agent.getChemGained() / sum), dfdouble.format(agent.getCarnGained() / sum));
-				String bodyEnergy = String.format("Stored: %s", agent.getTotalBodyEnergy());
+				String miscEnergy = String.format("Body: %s, Stomach: %s", agent.getTotalBodyEnergy(), agent.getEnergyInStomach());
 				String geneInfo = String.format("Body: %s", agent.getGeneDNA());
 				String deathInfo = String.format("Death: %s", agent.getReasonForDeath());
 				String nearbyInfo = "";
@@ -482,11 +481,11 @@ public class LibDisplay {
 				font.draw(batch, reproductionInfo, x, index++ * h);
 				font.draw(batch, ancestryInfo, x, index++ * h);
 				font.draw(batch, maturityInfo, x, index++ * h);
-				font.draw(batch, foodInfo, x, index++ * h);
+//				font.draw(batch, foodInfo, x, index++ * h);
 				font.draw(batch, dietInfo, x, index++ * h);
-				font.draw(batch, nearbyInfo, x, index++ * h);
+//				font.draw(batch, nearbyInfo, x, index++ * h);
 				font.draw(batch, "" + agent.getEntitiesBlockingLightFactor(), x, index++ * h);
-				font.draw(batch, bodyEnergy, x, index++ * h);
+				font.draw(batch, miscEnergy, x, index++ * h);
 				font.draw(batch, geneInfo, x, index++ * h);
 				font.draw(batch, deathInfo, x, index++ * h);
 				font.draw(batch, "" + c1, x, index++ * h);

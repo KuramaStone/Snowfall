@@ -46,7 +46,7 @@ public abstract class Entity implements QuadSortable, Comparable<Entity> {
 	protected transient Coords lastCoords;
 	protected int age;
 
-	private double digestionDifficulty = 0;
+	private double digestionDifficulty = 1;
 
 	protected double relative_direction; // in radians
 	protected Vector2 velocity;

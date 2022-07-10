@@ -26,7 +26,7 @@ public class AgentLife extends Agent {
 
 	private static final int entitiesToTrack = 1;
 	// sunlight, hue, relative x, relative y, energy, speed, nearby count, to light
-	public static final int totalInputs = 13 + 9 * entitiesToTrack + 7, outputs = 8;
+	public static final int totalInputs = 13 + 9 * entitiesToTrack + 7, outputs = 9;
 
 	public AgentLife(World world, Species<Agent> parentSpecies, Color color, double speed, double size, Vector2 location, boolean makeBrain) {
 		super(world, parentSpecies, color, speed, size, location, true);
@@ -180,12 +180,13 @@ public class AgentLife extends Agent {
 							}
 
 							// calculate efficiency
-							energyGained *= getDietModifier(false);
-							energyGained *= 0.75;
-
-							addEnergy(energyGained);
-							carnGained += energyGained;
+//							energyGained *= getDietModifier(false);
+//							energyGained *= 0.75;
 							world.totalPreyGained += energyGained;
+							
+							EntityBite bite = new EntityBite(prey, energyGained);
+
+							stomach.add(bite);
 							attacked = true;
 						}
 					}
@@ -202,9 +203,11 @@ public class AgentLife extends Agent {
 						if(attack) {
 							// instantly eat other things
 							double energyGained = entity.getTotalBodyEnergy();
-							addEnergy(energyGained);
+
+							EntityBite bite = new EntityBite(entity, energyGained);
+							stomach.add(bite);
+							
 							entity.addEnergy(-energyGained);
-							carnGained += energyGained;
 							world.totalScavGained += energyGained;
 							attacked = true;
 						}
@@ -235,8 +238,9 @@ public class AgentLife extends Agent {
 		brain.setWeightOf(brain.getLayers().get(0).get(totalInputs).getNeuronID(), brain.getLayers().get(1).get(3).getNeuronID(), 1); // bias to light
 		brain.setWeightOf(brain.getLayers().get(0).get(totalInputs).getNeuronID(), brain.getLayers().get(1).get(4).getNeuronID(), 1); // bias to chem
 		brain.setWeightOf(brain.getLayers().get(0).get(totalInputs).getNeuronID(), brain.getLayers().get(1).get(6).getNeuronID(), 1); // bias to attack
+		brain.setWeightOf(brain.getLayers().get(0).get(totalInputs).getNeuronID(), brain.getLayers().get(1).get(8).getNeuronID(), 1); // bias to digest
 
-		brain.labelOutputs("rotate", "force", "dtf", "light", "chemo", "heal", "attack", "hold");
+		brain.labelOutputs("rotate", "force", "dtf", "light", "chemo", "heal", "attack", "hold", "digest");
 
 		String[] entityLabels = new String[] { "r", "g", "b", "x", "y", "rot", "f value", "fx", "fy" };
 		String[] inputs = new String[totalInputs];
@@ -556,10 +560,10 @@ public class AgentLife extends Agent {
 		this.lastShadowValue = world.getShadowsAt(this.location);
 		this.lastLightExposure = (float) intensity;
 
-		double gain = 18 * intensity;
+		double gain = 10 * intensity;
 		gain *= dietMod;
 		gain *= competition;
-		gain *= currentMetabolism;
+		gain *= Math.pow(currentMetabolism, 2);
 		gain *= world.getSkillFactor();
 		
 		if(isSelected())
@@ -584,10 +588,10 @@ public class AgentLife extends Agent {
 		double intensity = getChemsReceived();
 		double dietMod = getDietModifier(false);
 
-		double gain = 20 * intensity;
+		double gain = 25 * intensity;
 		gain *= competition;
 		gain *= dietMod;
-		gain *= currentMetabolism;
+		gain *= Math.pow(currentMetabolism, 2);
 		gain *= world.getSkillFactor();
 
 		world.totalChemsGained += gain;
@@ -647,8 +651,8 @@ public class AgentLife extends Agent {
 		double geneMultiplier = this.geneMultiplier * 2;
 		double geneFactor = this.geneFactor;
 
-		brain.mutateNetwork(0.1 * geneMultiplier, 0 * geneMultiplier, 0.05 * geneMultiplier, 0.02 * geneMultiplier,
-				0.02 * geneMultiplier,
+		brain.mutateNetwork(0.2 * geneMultiplier, 0 * geneMultiplier, 0.15 * geneMultiplier, 0.02 * geneMultiplier,
+				0.5 * geneMultiplier,
 				new AsexualReproductionRandomizer(0.1 * geneMultiplier, 0.1 * geneFactor),
 				0.1 * geneFactor, 0.05 * geneMultiplier, 0.02 * geneMultiplier); // activation change
 		brain.getPhenotype().mutate(0.15 * geneMultiplier);

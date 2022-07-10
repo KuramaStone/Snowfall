@@ -337,7 +337,7 @@ public class World {
 
 	public void adjustSkillFactor() {
 		int living = getLivingPopulation();
-		double c = 200;
+		double c = 100;
 		skillFactor = skillFactor * Math.exp((maxPopulation - living) / (maxPopulation * c));
 		
 		if(skillFactor > 1)
@@ -817,6 +817,7 @@ public class World {
 	}
 
 	public void save(boolean autosave) {
+		System.out.println("Saving...");
 
 		// create new list to avoid thread nonsense
 		File parent = new File(engine.getSaveLocationPath());
@@ -1119,7 +1120,7 @@ public class World {
 		double yValue = Math.abs(location.y - bounds.getMaxY()) / (bounds.getHeight());
 		yValue = Math.max(0, Math.min(1, yValue));
 
-		double chemicalLevels = Math.pow(yValue, 2);
+		double chemicalLevels = Math.pow(yValue, 4);
 		chemicalLevels = Math.max(0, Math.min(1, chemicalLevels));
 
 		return chemicalLevels;
@@ -1238,7 +1239,12 @@ public class World {
 		float x = (float) (((vector.x - bounds.getMinX()) / bounds.getWidth()) * map.getWidth());
 		float y = (float) (((vector.y - bounds.getMinY()) / bounds.getHeight()) * map.getHeight());
 
-		return map.getPixel((int) x, (int) y) / -256f;
+		float shadows =  map.getPixel((int) x, (int) y) / -256f;
+		
+		// look, it needs this for some reason. The shader won't round this to zero
+		shadows = (shadows - 0.00390625f) * (1.0f / (1 - 0.00390625f));
+		
+		return shadows;
 	}
 
 	public List<Agent> getAgents() {
