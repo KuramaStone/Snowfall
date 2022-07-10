@@ -19,7 +19,6 @@ import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.OrthographicCamera;
 import com.badlogic.gdx.graphics.Pixmap;
-import com.badlogic.gdx.graphics.PixmapIO;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.Texture.TextureFilter;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
@@ -433,6 +432,7 @@ public class LibDisplay {
 		Runtime runtime = Runtime.getRuntime();
 		String heapInfo = String.format("Heap: %skb / %s (%s)", (long) ((runtime.totalMemory() - runtime.freeMemory()) / 1e6), runtime.maxMemory() / 1e6,
 				dfdouble.format(((double) runtime.totalMemory() - runtime.freeMemory()) / runtime.maxMemory()));
+		String skillInfo = String.format("Skill factor: %s", dfdouble.format(engine.getWorld().getSkillFactor()));
 
 		float x = 3;
 		float h = -font.getCapHeight() * 1.3f;
@@ -446,6 +446,7 @@ public class LibDisplay {
 		font.draw(batch, fpsInfo, x, index++ * h);
 		font.draw(batch, "Textures: " + TextureTracker.activeTextures, x, index++ * h);
 		font.draw(batch, heapInfo, x, index++ * h);
+		font.draw(batch, skillInfo, x, index++ * h);
 
 		index += 2;
 

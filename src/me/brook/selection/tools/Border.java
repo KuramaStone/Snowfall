@@ -144,7 +144,7 @@ public class Border extends Area implements Serializable, Bounds {
 			}
 		}
 
-		PixmapIO.writePNG(Gdx.files.absolute("E:\\Programming\\Natural Selection\\map.png"), worldPixmap);
+		//		PixmapIO.writePNG(Gdx.files.absolute("E:\\Programming\\Natural Selection\\map.png"), worldPixmap);
 
 		Texture wormTexture = new Texture(wormPixmap);
 		Texture terrainTexture = new Texture(worldPixmap);

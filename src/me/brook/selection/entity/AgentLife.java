@@ -560,6 +560,7 @@ public class AgentLife extends Agent {
 		gain *= dietMod;
 		gain *= competition;
 		gain *= currentMetabolism;
+		gain *= world.getSkillFactor();
 		
 		if(isSelected())
 			getAge();
@@ -578,15 +579,16 @@ public class AgentLife extends Agent {
 			if(ne.getKey().isAgent() && ne.getKey().getLocation().distanceToSq(this.location) < sight_range &&
 					((Agent) ne.getKey()).wantsToChemosynthesize)
 				nearbySize++;
-		double competition = Math.max(0, Math.min(1, (1.0 / (1 + Math.pow(nearbySize, 1))))); // nearby agents reduce light for this agent
+		double competition = Math.max(0, Math.min(1, (1.0 / (1 + Math.pow(nearbySize, 2))))); // nearby agents reduce light for this agent
 		// double competition = Math.max(0, Math.min(1, (size - entitiesBlockingChemsFactor * 2) / size));
 		double intensity = getChemsReceived();
 		double dietMod = getDietModifier(false);
 
-		double gain = 25 * intensity;
+		double gain = 20 * intensity;
 		gain *= competition;
 		gain *= dietMod;
 		gain *= currentMetabolism;
+		gain *= world.getSkillFactor();
 
 		world.totalChemsGained += gain;
 		addEnergy(gain);

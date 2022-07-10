@@ -100,7 +100,7 @@ public class World {
 
 	private Vector2 cursorEntity;
 
-	private int minimumPopulation = 500, idealPopulation = 500;
+	private int minimumPopulation = 500, maxPopulation = 3000;
 	int[] relativePopulation;
 
 	private int selectedPopulation = -1;
@@ -234,7 +234,7 @@ public class World {
 
 					loadedEntities.forEach(e -> addEntity(e));
 					loadedEntities.forEach(e -> e.init());
-					
+
 					wasLoadedFromSave = true;
 				}
 				catch(IOException e) {
@@ -335,6 +335,17 @@ public class World {
 		return agent;
 	}
 
+	public void adjustSkillFactor() {
+		int living = getLivingPopulation();
+		double c = 200;
+		skillFactor = skillFactor * Math.exp((maxPopulation - living) / (maxPopulation * c));
+		
+		if(skillFactor > 1)
+			skillFactor = 1;
+
+//		System.out.println(skillFactor);
+	}
+
 	public void update() throws InterruptedException {
 		entities.removeIf(e -> e == null);
 		scheduledDisposes();
@@ -350,6 +361,7 @@ public class World {
 		focusOnSelectedAgent();
 
 		checkAdditionsRemovals();
+		adjustSkillFactor();
 
 		if(realTime) {
 			if((this.ticksSinceRestart) % 500 == 0) {
@@ -517,7 +529,7 @@ public class World {
 
 		multithreading = true;
 		try {
-//			 this.threads.forEach(t -> t.call());
+			// this.threads.forEach(t -> t.call());
 			executor.invokeAll(this.threads);
 		}
 		catch(Exception e) {
@@ -1232,11 +1244,11 @@ public class World {
 	public List<Agent> getAgents() {
 		return this.speciesManager.getAllGeneticCarriers();
 	}
-	
+
 	public boolean wasLoadedFromSave() {
 		return wasLoadedFromSave;
 	}
-	
+
 	public int getSeed() {
 		return seed;
 	}

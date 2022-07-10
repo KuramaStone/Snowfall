@@ -419,7 +419,7 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 		Hitbox hb = child.buildHitbox(loc, (float) child.getRelativeDirection());
 		double distance = Math.max(child.structure.getBounds().getWidth(), child.structure.getBounds().getHeight()) * Agent.getSizeOfSegment();
 		// arranged in order of likelihood
-		while(loc == null || intersectsHitbox(hb) || intersectsNearbyAgent(hb) || child.intersectsWall(child.getLocation(), (float) child.getRelativeDirection())
+		while(loc == null || intersectsHitbox(hb) || intersectsNearbyAgent(hb) || child.intersectsWall(loc, (float) child.getRelativeDirection())
 				|| !world.getBorders().contains(loc.toPoint())) {
 			loc = this.getLocation().copy()
 					.add(new Vector2(random.nextDouble() * Math.PI * 2).multiply(distance * 4 * ((random.nextDouble() * 0.75) + 0.25)));

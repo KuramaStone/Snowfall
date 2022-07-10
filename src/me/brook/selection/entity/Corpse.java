@@ -28,7 +28,7 @@ public class Corpse extends Entity {
 		super.addEnergy(energy);
 		sensorHormones = buildHormones(1, 0, 0, (float) energy, 0, 0, 0);
 	}
-
+	
 	@Override
 	public void tick(World world) {
 		super.tick(world);
@@ -50,6 +50,9 @@ public class Corpse extends Entity {
 		if(getEnergy() <= 0) {
 			die(world, "eaten");
 		}
+		
+		if(world.getBorders().intersects(this.location))
+			die(world, "fought the law");
 	}
 
 	@Override
