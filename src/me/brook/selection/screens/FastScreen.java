@@ -19,6 +19,7 @@ public class FastScreen extends DisplayScreen {
 	@Override
 	public void render(float delta) {
 		ScreenUtils.clear(0, 0, 0, 1);
+		renderShadows();
 		display.drawInfo(true);
 	}
 

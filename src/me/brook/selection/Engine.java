@@ -84,6 +84,7 @@ public class Engine extends Game {
 		if(!finishedLoading) {
 			isLoading = true;
 			loadSome();
+			return;
 		}
 		super.render();
 

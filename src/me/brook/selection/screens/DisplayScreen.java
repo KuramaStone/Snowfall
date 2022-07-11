@@ -33,6 +33,11 @@ public class DisplayScreen extends ScreenAdapter {
 		
 		display.createCameras();
 		updateReferences();
+		renderShadows();
+	}
+	
+	public void renderShadows() {
+
 		display.renderShadows((int) (engine.getWorld().getWorldWidth() / 16), (int) (engine.getWorld().getWorldHeight() / 32));
 	}
 

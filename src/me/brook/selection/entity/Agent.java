@@ -294,9 +294,9 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 		}
 
 		// eat food
-		if(this.biteDelay-- < 0 && wantsToEat) {
-			lookForFood();
-		}
+//		if(this.biteDelay-- < 0 && wantsToEat) {
+//			lookForFood();
+//		}
 		if(wantsToPhotosynthesize && this.structure.hasType(Structure.PHOTO))
 			photosynthesis();
 		if(wantsToChemosynthesize && this.structure.hasType(Structure.CHEMO))
@@ -374,6 +374,7 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 	public void dispose() {
 		super.dispose();
 		lastNearbyEntities = null;
+		hasCollidedWith = null;
 		collisionInfo = null;
 		parent = null;
 		parentSpecies = null;
@@ -477,7 +478,7 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 			return null;
 
 		try {
-			List<Agent> compatible = new ArrayList<>();
+			List<Agent> compatible = new ArrayList<Agent>();
 
 			// always prefer those with more energy
 			for(Entry<Entity, EntityViewInfo> eyeData : lastNearbyEntities) {
@@ -493,10 +494,9 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 				}
 
 			}
-			compatible.sort(viewEnergySorter);
 
 			if(!compatible.isEmpty()) {
-				return compatible.get(random.nextInt((int) Math.ceil(compatible.size() * 0.5)));
+				return compatible.get(random.nextInt(compatible.size()));
 			}
 		}
 		catch(Exception e) {
@@ -728,14 +728,6 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 		}
 	};
 
-	public static Comparator<? super Agent> viewEnergySorter = new Comparator<Agent>() {
-
-		@Override
-		public int compare(Agent o1, Agent o2) {
-			return (int) Math.signum(o2.getEnergy() - o1.getEnergy());
-		}
-	};
-
 	public static class DistanceToOriginSorter implements Comparator<Entry<Entity, EntityViewInfo>> {
 
 		@Override
@@ -837,7 +829,7 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 		getTrueTheta(this.relative_direction + changeAngleBy);
 		// this.relative_direction = -Math.PI / 2;
 
-		wantsToReproduce = out[2] >= 0.0;
+		wantsToReproduce = out[2] > 0.0;
 
 		double speed = (this.speedGene * Math.pow(structure.getStructure().size(), 2)) * currentMetabolism * 1;
 
@@ -886,7 +878,12 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 	}
 
 	public double getMass(boolean useMaturity) {
-		return (getSizeOfSegment()) * segmentCount * density * (useMaturity ? Math.min(Math.max(maturity, 0.05), 1) : 1);
+		double maturityModifier = useMaturity ? Math.min(Math.max(maturity, 0.05), 1) : 1;
+		double mass = (getSizeOfSegment()) * Math.pow(segmentCount, 2) * density * maturityModifier;
+		
+		if(!Double.isFinite(mass))
+			getAge();
+		return mass;
 	}
 
 	////////////////////////////// energy methods
@@ -1485,7 +1482,7 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 		structure.build(); // build structure from dna
 		for(Segment seg : structure.getStructure())
 			seg.setStrength(1);
-		sight_range = (float) (2 * getSizeOfSegment() * Math.max(structure.getBounds().getWidth(), structure.getBounds().getHeight()));
+		sight_range = (float) (4 * getSizeOfSegment() * Math.max(structure.getBounds().getWidth(), structure.getBounds().getHeight()));
 		initHealth();
 	}
 
@@ -1528,7 +1525,7 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 		if(lastNearbyEntities != null)
 			for(NearbyEntry near : lastNearbyEntities) {
 
-				if(near != null) {
+				if(near != null && near.entity.isAlive() && near.entity.shouldExist()) {
 
 					if(near.entity.isAgent()) {
 
@@ -1580,7 +1577,7 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 			if(this.hasCollidedWith.contains(entity))
 				continue;
 
-			if(entity != null) {
+			if(entity != null && entity.isAlive() && entity.shouldExist()) {
 
 				if(entity.isAgent()) {
 					Agent rude = (Agent) entity;
@@ -1627,6 +1624,8 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 							double lerp = (rudeMass / (myMass + rudeMass));
 							double moveBy = getSizeOfSegment() - dist;
 							Vector2 offset = new Vector2(closestA.atan2(closestB)).multiply(moveBy);
+							if(!offset.isFinite())
+								offset.isFinite();
 							this.applyImpulse(offset.multiply(myMass * lerp));
 							rude.applyImpulse(offset.multiply(-rudeMass * (1 - lerp)));
 

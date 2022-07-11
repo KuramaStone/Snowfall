@@ -19,6 +19,7 @@ public class LoadingScreen extends DisplayScreen {
 
 	@Override
 	public void render(float delta) {
+		// we don't super 
 		display.createCameras();
 		updateReferences();
 		ScreenUtils.clear(0, 0, 0, 1);

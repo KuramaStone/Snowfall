@@ -299,7 +299,7 @@ public class LibDisplay {
 
 		Texture texture = new TextureTracker(pix);
 		TextureRegion texRegion = new TextureRegion(texture);
-		polybatch.setColor(0, 0, 0, 0.25f);
+		polybatch.setColor(0, 0, 0, 0.67f);
 
 		for(int i = 0; i < toRender.size(); i++) {
 			Entity entity = toRender.get(i);
@@ -360,6 +360,8 @@ public class LibDisplay {
 	private Vector2 toQuadVector(Vector2 vector2, int width, int height, Rectangle2D worldbounds) {
 		float x = (float) (((vector2.x - worldbounds.getMinX()) / worldbounds.getWidth()) * width);
 		float y = (float) (((vector2.y - worldbounds.getMinY()) / worldbounds.getHeight()) * height);
+		x = Math.max(0, Math.min(x, width));
+		y = Math.max(0, Math.min(y, height));
 
 		return new Vector2(x, y);
 	}
@@ -680,7 +682,7 @@ public class LibDisplay {
 				float nx = in.left + ((float) i / list.size()) * (width - in.left - in.right);
 				float ny = (float) (in.bottom + graphHeight * (value / highest));
 
-				shapes.line(lx, ly, nx, ny);
+				shapes.rectLine(lx, ly, nx, ny, 2f);
 
 				lx = nx;
 				ly = ny;

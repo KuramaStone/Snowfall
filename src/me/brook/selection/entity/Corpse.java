@@ -33,7 +33,7 @@ public class Corpse extends Entity {
 	public void tick(World world) {
 		super.tick(world);
 
-		size = Math.sqrt(energy / Math.PI) * 0.33; // inverse of entity formula to use same size
+		size = Math.sqrt(Math.max(0, energy) / Math.PI) * 0.33; // inverse of entity formula to use same size
 		if(size < 5)
 			size = 5;
 

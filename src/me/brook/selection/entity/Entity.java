@@ -11,9 +11,7 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.ConcurrentModificationException;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -23,7 +21,6 @@ import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 
 import me.brook.neat.network.NeatNetwork;
-import me.brook.selection.LibDisplay;
 import me.brook.selection.World;
 import me.brook.selection.entity.body.Hitbox.CellCollisionInfo;
 import me.brook.selection.tools.QuadSortable;
@@ -149,8 +146,7 @@ public abstract class Entity implements QuadSortable, Comparable<Entity> {
 					}
 				}
 			}
-			catch(ConcurrentModificationException e) {
-				e.printStackTrace();
+			catch(Exception e) {
 			}
 		}
 		
@@ -168,14 +164,21 @@ public abstract class Entity implements QuadSortable, Comparable<Entity> {
 	}
 
 	public double getTotalMass() {
-		return getMass() + attachedMass();
+		double myMass = getMass();
+		double attachedMass = attachedMass();
+		
+		if(!Double.isFinite(myMass + attachedMass))
+			getAge();
+		
+		return myMass + attachedMass;
 	}
 
 	public double attachedMass() {
 		double mass = 0;
 		if(attachedEntities != null)
 			for(Entity ent : new ArrayList<>(this.attachedEntities)) {
-				mass += ent.getMass();
+				double entMass = ent.getMass();
+				mass += entMass;
 			}
 		return mass;
 	}

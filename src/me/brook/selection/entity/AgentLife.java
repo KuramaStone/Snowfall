@@ -209,7 +209,8 @@ public class AgentLife extends Agent {
 							EntityBite bite = new EntityBite(entity, energyGained);
 							stomach.add(bite);
 
-							entity.addEnergy(-energyGained);
+							entity.energy = 0;
+							entity.die(world, "eaten while its dead because its a corpse so its not exactly alive but it was still eaten.");
 							world.totalScavGained += energyGained;
 							attacked = true;
 						}
@@ -241,6 +242,7 @@ public class AgentLife extends Agent {
 		brain.setWeightOf(brain.getLayers().get(0).get(totalInputs).getNeuronID(), brain.getLayers().get(1).get(4).getNeuronID(), 1); // bias to chem
 		brain.setWeightOf(brain.getLayers().get(0).get(totalInputs).getNeuronID(), brain.getLayers().get(1).get(6).getNeuronID(), 1); // bias to attack
 		brain.setWeightOf(brain.getLayers().get(0).get(totalInputs).getNeuronID(), brain.getLayers().get(1).get(8).getNeuronID(), 1); // bias to digest
+		brain.setWeightOf(brain.getLayers().get(0).get(totalInputs).getNeuronID(), brain.getLayers().get(1).get(2).getNeuronID(), 1); // bias to fuck
 
 		brain.labelOutputs("rotate", "force", "dtf", "light", "chemo", "heal", "attack", "hold", "digest");
 
@@ -562,17 +564,17 @@ public class AgentLife extends Agent {
 		// double competition = Math.max(0, Math.min(1, (size - entitiesBlockingLightFactor) / size));
 		double intensity = getLightReceived();
 		double dietMod = getDietModifier(true);
-		double competition = Math.max(0, Math.min(1, (1.0 / (1 + Math.pow(nearbySize, 2))))); // nearby agents reduce light for this agent
+		double competition = Math.max(0, Math.min(1, (1.0 / (1 + Math.pow(nearbySize, 1))))); // nearby agents reduce light for this agent
 		this.lastLightExposure = (float) intensity;
 
-		double gain = 40 * intensity;
+		double gain = 30 * intensity;
 		gain *= dietMod;
 		gain *= competition;
 		gain *= currentMetabolism;
 		// gain *= world.getSkillFactor();
 
-		if(isSelected())
-			getAge();
+//		if(isSelected())
+//			System.out.println(gain);
 
 		world.totalLightGained += gain;
 		addEnergy(gain);
@@ -588,7 +590,7 @@ public class AgentLife extends Agent {
 			if(ne.getKey().isAgent() && ne.getKey().getLocation().distanceToSq(this.location) < sight_range &&
 					((Agent) ne.getKey()).wantsToChemosynthesize)
 				nearbySize++;
-		double competition = Math.max(0, Math.min(1, (1.0 / (1 + Math.pow(nearbySize, 2))))); // nearby agents reduce light for this agent
+		double competition = Math.max(0, Math.min(1, (1.0 / (1 + Math.pow(nearbySize, 1))))); // nearby agents reduce light for this agent
 		double intensity = getChemsReceived();
 		double dietMod = getDietModifier(false);
 

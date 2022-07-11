@@ -155,7 +155,7 @@ public class Border extends Area implements Serializable, Bounds {
 		wormShader.setUniformi("wormTexture", 1);
 		Gdx.gl.glActiveTexture(GL20.GL_TEXTURE0);
 		
-		batch.setColor(new Color(1f, 0.83f, .58f, 1f)); // cave color
+		batch.setColor(new Color(0.85f, 0.65f, 0.42f, 1f)); // cave color
 		batch.draw(terrainTexture, 0, 0);
 		
 		batch.end();

@@ -1,22 +1,21 @@
 package me.brook.selection;
 
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
+import java.util.HashMap;
+import java.util.Map;
+
+import org.nustaq.serialization.FSTConfiguration;
 
 public class Test {
 
 	public static void main(String[] args) {
 
-		ExecutorService exe = Executors.newFixedThreadPool(1);
-
-		Future<?> future = null;
-		while(true) {
-			if(future != null && !future.isDone())
-				continue;
-			future = exe.submit((Runnable) () -> System.out.println(1));
-		}
-
+		FSTConfiguration conf = FSTConfiguration.createJsonConfiguration(true, false);
+		
+		Map<String, Object> map = new HashMap<>();
+		map.put("data", "null");
+		map = (Map<String, Object>) conf.asObject(conf.asByteArray(map));
+		
+		System.out.println(map.get("data") == null);
 	}
 
 }

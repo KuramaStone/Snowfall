@@ -23,6 +23,7 @@ public class InfoScreen extends DisplayScreen {
 
 	@Override
 	public void render(float delta) {
+		renderShadows();
 		updateReferences();
 
 		if(engine.getRenderingMode() == RenderingMode.NETWORK) {
