@@ -45,7 +45,7 @@ public class Corpse extends Entity {
 
 		Rectangle2D bounds = world.getBorders().getBounds();
 		
-		addEnergy(-1 * 0.02 * Math.pow(1.00001, age * 50));
+		addEnergy(-1 * 0.1 * Math.pow(1.00001, age * 50 * (1 + world.getLivingPopulation() / 500.0)));
 
 		if(getEnergy() <= 0) {
 			die(world, "eaten");

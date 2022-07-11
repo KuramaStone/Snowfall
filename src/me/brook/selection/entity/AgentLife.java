@@ -1,7 +1,6 @@
 package me.brook.selection.entity;
 
 import java.awt.Color;
-import java.awt.geom.Line2D;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -26,7 +25,7 @@ public class AgentLife extends Agent {
 
 	private static final int entitiesToTrack = 1;
 	// sunlight, hue, relative x, relative y, energy, speed, nearby count, to light
-	public static final int totalInputs = 13 + 9 * entitiesToTrack + 7, outputs = 9;
+	public static final int totalInputs = 12 + 6 * entitiesToTrack, outputs = 9;
 
 	public AgentLife(World world, Species<Agent> parentSpecies, Color color, double speed, double size, Vector2 location, boolean makeBrain) {
 		super(world, parentSpecies, color, speed, size, location, true);
@@ -47,6 +46,7 @@ public class AgentLife extends Agent {
 	@Override
 	public void init() {
 		super.init();
+		buildBody();
 		this.hitbox = buildHitbox();
 		updateSensorHormones();
 	}
@@ -65,6 +65,8 @@ public class AgentLife extends Agent {
 		if(structure == null || hitbox == null) {
 			return;
 		}
+		if(!shouldExist())
+			return;
 
 		super.tick(world);
 		ejectFood();
@@ -147,7 +149,7 @@ public class AgentLife extends Agent {
 
 						if(attack) {
 
-							double damage = getTotalMass() * 20;
+							double damage = getTotalMass() * 20 * currentMetabolism;
 							damage /= 75;
 
 							// size modifier
@@ -180,10 +182,10 @@ public class AgentLife extends Agent {
 							}
 
 							// calculate efficiency
-//							energyGained *= getDietModifier(false);
-//							energyGained *= 0.75;
+							// energyGained *= getDietModifier(false);
+							// energyGained *= 0.75;
 							world.totalPreyGained += energyGained;
-							
+
 							EntityBite bite = new EntityBite(prey, energyGained);
 
 							stomach.add(bite);
@@ -206,7 +208,7 @@ public class AgentLife extends Agent {
 
 							EntityBite bite = new EntityBite(entity, energyGained);
 							stomach.add(bite);
-							
+
 							entity.addEnergy(-energyGained);
 							world.totalScavGained += energyGained;
 							attacked = true;
@@ -242,7 +244,7 @@ public class AgentLife extends Agent {
 
 		brain.labelOutputs("rotate", "force", "dtf", "light", "chemo", "heal", "attack", "hold", "digest");
 
-		String[] entityLabels = new String[] { "r", "g", "b", "x", "y", "rot", "f value", "fx", "fy" };
+		String[] entityLabels = new String[] { "r", "g", "b", "dist", "rot", "f value" };
 		String[] inputs = new String[totalInputs];
 		int index = 0;
 		for(int i = 0; i < entitiesToTrack; i++) {
@@ -252,7 +254,7 @@ public class AgentLife extends Agent {
 
 		String[] otherLabels = new String[] { "light", "chemo", "speed x",
 				"speed y", "age",
-				"energy", "nearby", "to light", "wall", "shadows", "time", "hurt", "murdering", "H-photo", "H-chemo", "H-hunter", "H-energy", "H-r", "H-g", "H-b" };
+				"energy", "nearby", "to light", "wall", "shadows", "hurt", "murdering" };
 
 		for(int i = 0; i < otherLabels.length; i++) {
 			inputs[index++] = otherLabels[i];
@@ -272,7 +274,6 @@ public class AgentLife extends Agent {
 	public void die(World world, String reason) {
 		super.die(world, reason);
 		setTimeOfDeath(System.currentTimeMillis());
-		this.lastNearbyEntities = null;
 	}
 
 	int ageOfLastCalc = -1;
@@ -282,19 +283,21 @@ public class AgentLife extends Agent {
 		if(!isAlive()) {
 			return;
 		}
+		ageOfLastCalc = age;
+		if(!hasBrain) {
+			return;
+		}
+		if(brain == null) {
+			return;
+		}
+		if(!this.shouldExist())
+			return;
 
 		// if(age == ageOfLastCalc) {
 		// System.out.println("Calculated twice in one tick.");
 		// }
-		ageOfLastCalc = age;
 
-		if(!hasBrain) {
-			return;
-		}
 
-		if(brain == null) {
-			return;
-		}
 		Vector2 location = getLocation();
 
 		// double toSurface = Math.abs(location.y - world.getBorders().getBounds().getMaxY()) + 50;
@@ -304,87 +307,90 @@ public class AgentLife extends Agent {
 		this.entitiesBlockingChemsFactor = 0;
 		calculateNearbyEntities();
 
-		Vector2 wall = world.getBorders().getClosestLineIntersection(
-				new Line2D.Double(location.toPoint(),
-						location.add(new Vector2(this.relative_direction).multiply(sight_range)).toPoint()));
-
 		double[] inputs = new double[brain.getInputNeurons().size()];
 
-		// String[] labels = new String[] { "r", "g", "b", "x", "y", "f value", "light", "chemo", "speed", "age",
-		// "energy", "nearby" };
-		// age and nearby inputs
 		int index = 0;
-		for(int i = 0; i < entitiesToTrack; i++) {
-			NearbyEntry closest = this.lastNearbyEntities.size() <= i ? null : this.lastNearbyEntities.get(i);
-			if(closest == null || !attachedEntities.contains(closest.entity)) {
-				if(closest != null) {
+		for(int i = 0; i < this.lastNearbyEntities.size(); i++) {
+			NearbyEntry closest = this.lastNearbyEntities.get(i);
 
-					Vector2 relClosest = closest.entity.getLocation();
-					// translate and rotate relative to agent
-					relClosest = relClosest.subtract(location).rotate(new Vector2(), -this.getRelativeDirection());
-
-					Color c = closest.entity.getColor();
-
-					inputs[index++] = c.getRed() / 255.0;
-					inputs[index++] = c.getGreen() / 255.0;
-					inputs[index++] = c.getBlue() / 255.0;
-					inputs[index++] = relClosest.x / (1 + sight_range);
-					inputs[index++] = relClosest.y / (1 + sight_range);
-					inputs[index++] = relativeAngleTo(this.relative_direction, closest.entity.relative_direction); // show entity's direction relative to our own
-					inputs[index++] = 1.0 / (1 + closest.entity.getEnergy() / 10000.0);
-					inputs[index++] = closest.entity.velocity.x / (1 + sight_range);
-					inputs[index++] = closest.entity.velocity.y / (1 + sight_range);
-					
-					if(!Double.isFinite(closest.entity.velocity.y / (1 + sight_range))) {
-						getAge();
-					}
-					
+			if(closest != null) {
+				if(attachedEntities.contains(closest.entity)) {
+					continue;
 				}
-				else {
-					inputs[index++] = 0; // r
-					inputs[index++] = 0; // g
-					inputs[index++] = 0; // b
-					inputs[index++] = 0;
-					inputs[index++] = 0;
-					inputs[index++] = 0;
-					inputs[index++] = 1;
-					inputs[index++] = 1;
-					inputs[index++] = 1;
+
+				Vector2 relClosest = closest.entity.getLocation().copy();
+				// translate and rotate relative to agent
+				relClosest = relClosest.subtract(location).rotate(new Vector2(), -this.getRelativeDirection());
+
+				Color c = closest.entity.getColor();
+
+				if(!closest.entity.shouldExist()) { // check after values are locked
+					continue;
 				}
+
+				inputs[index++] = c.getRed() / 255.0;
+				inputs[index++] = c.getGreen() / 255.0;
+				inputs[index++] = c.getBlue() / 255.0;
+				inputs[index++] = (relClosest.distanceToSq(this.location)) / (1 + sight_range);
+				inputs[index++] = relativeAngleTo(this.relative_direction, closest.entity.relative_direction); // show entity's direction relative to our own
+				inputs[index++] = 1.0 / (1 + closest.entity.getEnergy() / 10000.0);
+
 			}
+			else {
+				inputs[index++] = 0; // r
+				inputs[index++] = 0; // g
+				inputs[index++] = 0; // b
+				inputs[index++] = 0;
+				inputs[index++] = 0;
+				inputs[index++] = 1;
+			}
+
+			break;
 		}
 
-		inputs[index++] = world.getLightAt(location); // 9
+		boolean isFacingWall = true;
+
+		for(int step = 0; step < 2; step++) {
+			// step forward to see if the wall intersects that point until sight_range units away
+			if(world.getBorders().intersects(this.location.add(new Vector2(this.relative_direction).multiply(this.sight_range * (step / 4.0))))) {
+				isFacingWall = true;
+				break;
+			}
+		}
+		this.lastShadowValue = world.getShadowsAt(this.location);
+
+		Vector2 relVelocity = this.velocity.rotate(new Vector2(), this.relative_direction);
+		
+		inputs[index++] = world.getLightAt(location); // 6
 		inputs[index++] = world.getChemicalAt(location);
-		inputs[index++] = velocity.x;
-		inputs[index++] = velocity.y;
+		inputs[index++] = 1 / (1 + relVelocity.x);
+		inputs[index++] = 1 / (1 + relVelocity.y);
 		inputs[index++] = 1.0 / (1 + age);
 		inputs[index++] = 1.0 / (1 + this.getEnergy());
 		inputs[index++] = 1.0 / (1 + lastNearbyEntities.size());
 		inputs[index++] = relativeAngleTo(Math.PI / 2, relative_direction); // to light is just their direction relative to up
-		inputs[index++] = wall == null ? 1 : location.distanceToRaw(wall) / (sight_range * sight_range); // world.getFoodNoise(getLocation().x, getLocation().y);
-		inputs[index++] = world.getCurrentThetaAt(location); // direction of current at current spot
+		inputs[index++] = isFacingWall ? 1 : 0; // world.getFoodNoise(getLocation().x, getLocation().y);
 		inputs[index++] = lastShadowValue; // shadow value
 		inputs[index++] = 1.0 / (1 + getTicksSinceLastHurt()); // hurting
 		inputs[index++] = isAttacking ? 1 : 0; // hurting
 
-		float[] sumOfNearbyHormones = new float[this.sensorHormones.length];
-
-		int foundHormones = 0;
-		for(NearbyEntry near : this.lastNearbyEntities) {
-			if(near != null && near.entity != null && near.entity.sensorHormones != null) {
-
-				for(int i = 0; i < sumOfNearbyHormones.length; i++) {
-					double dist = near.entity.location.distanceToRaw(this.location);
-					sumOfNearbyHormones[i] += near.entity.sensorHormones[i] / (1 + dist);
-				}
-
-			}
-		}
-
-		for(int i = 0; i < sensorHormones.length; i++) {
-			inputs[index++] = sensorHormones[i];
-		}
+		// float[] sumOfNearbyHormones = new float[this.sensorHormones.length];
+		//
+		// int foundHormones = 0;
+		// for(NearbyEntry near : this.lastNearbyEntities) {
+		// if(near != null && near.entity != null && near.entity.sensorHormones != null) {
+		//
+		// for(int i = 0; i < sumOfNearbyHormones.length; i++) {
+		// double dist = near.entity.location.distanceToRaw(this.location);
+		// sumOfNearbyHormones[i] += near.entity.sensorHormones[i] / (1 + dist);
+		// }
+		//
+		// }
+		// }
+		//
+		// for(int i = 0; i < sensorHormones.length; i++) {
+		// inputs[index++] = sensorHormones[i];
+		// }
 
 		// send inputs to brain
 		brain.setInputs(inputs);
@@ -417,7 +423,7 @@ public class AgentLife extends Agent {
 			}
 		}
 
-		nearby.sort(eyeDistanceSorter);
+		nearby.sort(new DistanceToOriginSorter());
 		if(!nearby.isEmpty())
 			this.closestEntity = nearby.get(0).entity;
 		else
@@ -557,15 +563,14 @@ public class AgentLife extends Agent {
 		double intensity = getLightReceived();
 		double dietMod = getDietModifier(true);
 		double competition = Math.max(0, Math.min(1, (1.0 / (1 + Math.pow(nearbySize, 2))))); // nearby agents reduce light for this agent
-		this.lastShadowValue = world.getShadowsAt(this.location);
 		this.lastLightExposure = (float) intensity;
 
-		double gain = 10 * intensity;
+		double gain = 40 * intensity;
 		gain *= dietMod;
 		gain *= competition;
-		gain *= Math.pow(currentMetabolism, 2);
-		gain *= world.getSkillFactor();
-		
+		gain *= currentMetabolism;
+		// gain *= world.getSkillFactor();
+
 		if(isSelected())
 			getAge();
 
@@ -584,15 +589,14 @@ public class AgentLife extends Agent {
 					((Agent) ne.getKey()).wantsToChemosynthesize)
 				nearbySize++;
 		double competition = Math.max(0, Math.min(1, (1.0 / (1 + Math.pow(nearbySize, 2))))); // nearby agents reduce light for this agent
-		// double competition = Math.max(0, Math.min(1, (size - entitiesBlockingChemsFactor * 2) / size));
 		double intensity = getChemsReceived();
 		double dietMod = getDietModifier(false);
 
-		double gain = 25 * intensity;
+		double gain = 50 * intensity;
 		gain *= competition;
 		gain *= dietMod;
-		gain *= Math.pow(currentMetabolism, 2);
-		gain *= world.getSkillFactor();
+		gain *= currentMetabolism;
+		// gain *= world.getSkillFactor();
 
 		world.totalChemsGained += gain;
 		addEnergy(gain);

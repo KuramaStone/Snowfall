@@ -1,13 +1,13 @@
 package me.brook.selection;
 
-import java.util.List;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 import me.brook.selection.entity.Agent;
 import me.brook.selection.entity.Entity;
 import me.brook.selection.tools.Profiler;
 
-public class CalculateTask implements Runnable, Callable<String> {
+public class CalculateTask implements Callable<String> {
 
 	private long initTime = System.nanoTime();
 
@@ -23,39 +23,35 @@ public class CalculateTask implements Runnable, Callable<String> {
 
 	@Override
 	public String call() {
-		run();
+		try {
+			run();
+		}
+		catch(Exception e) {
+			e.printStackTrace();
+		}
 		return "";
 	}
 
-	@Override
 	public void run() {
+		ConcurrentLinkedQueue<Entity> list = world.getThreadEntities();
+		if(list == null)
+			return;
 
-		List<Entity> list = world.getThreadEntities();
-		int start = (int) Math.floor(list.size() / World.getThreadCount()) * id;
-		int end = (int) (start + Math.floor(list.size() / World.getThreadCount()));
-		if(end > list.size())
-			end = list.size();
-
-		for(int i = start; i < end; i++) {
-			Entity e = list.get(i);
+		while(!list.isEmpty()) {
+			Entity e = list.poll();
 			if(e == null)
 				continue;
 
 			if(e.isAgent()) {
 				Agent a = (Agent) e;
-				long startTime = System.nanoTime();
-				a.calculateOutputs();
-				Profiler.addRecord("calc inputs", System.nanoTime() - startTime);
 
-				startTime = System.nanoTime();
+				a.calculateOutputs();
 				a.useBrainOutput();
-				Profiler.addRecord("use out", System.nanoTime() - startTime);
 			}
 			e.tick(world);
 
 			processed++;
 		}
-
 
 	}
 

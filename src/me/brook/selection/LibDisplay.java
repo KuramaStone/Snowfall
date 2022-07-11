@@ -71,6 +71,7 @@ public class LibDisplay {
 	public ShaderProgram worldShader, agentShader, structureShader, shadowShader, shadowMapShader;
 
 	public SpriteBatch batch;
+	PolygonSpriteBatch polybatch;
 
 	public BitmapFont font;
 	public Vector2 center;
@@ -88,6 +89,10 @@ public class LibDisplay {
 	private Map<String, List<Agent>> usedTextures;
 	private Map<String, Sprite> texturesByDna;
 
+	public RenderingMode prevMode;
+	private byte[] shadowByteArray;
+	private Vector2 shadowDimensions;
+
 	public LibDisplay(Engine engine) {
 		this.engine = engine;
 		random = new Random();
@@ -104,6 +109,7 @@ public class LibDisplay {
 
 	public void create() {
 		batch = new SpriteBatch();
+		polybatch = new PolygonSpriteBatch();
 		shapes = new ShapeRenderer();
 
 		font = new BitmapFont();
@@ -117,8 +123,6 @@ public class LibDisplay {
 
 		updateScreen(engine.getRenderingMode());
 	}
-
-	public RenderingMode lastMode;
 
 	public void render() {
 
@@ -139,7 +143,7 @@ public class LibDisplay {
 		else if(renderingMode == RenderingMode.LOADING) {
 			engine.setScreen(loadingScreen);
 		}
-		lastMode = renderingMode;
+		prevMode = renderingMode;
 
 	}
 
@@ -243,8 +247,6 @@ public class LibDisplay {
 
 		List<Entity> toRender = new ArrayList<>(engine.getWorld().getEntities());
 
-		PolygonSpriteBatch polybatch = new PolygonSpriteBatch();
-
 		framebuffer.begin();
 		drawShadows(polybatch, matrix, toRender, width, height, bounds);
 
@@ -267,10 +269,14 @@ public class LibDisplay {
 
 		framebuffer.end();
 		framebuffer.dispose();
+		
+		int length = buf.limit();
+		byte[] array = new byte[length];
+		buf.get(array);
+		this.shadowByteArray = array;
+		this.shadowDimensions = new Vector2(width, height);
 
 		// drawShadows(polybatch, worldCamera.combined, toRender, -1, bounds);
-
-		polybatch.dispose();
 
 	}
 
@@ -293,7 +299,7 @@ public class LibDisplay {
 
 		Texture texture = new TextureTracker(pix);
 		TextureRegion texRegion = new TextureRegion(texture);
-		polybatch.setColor(0, 0, 0, 0.1f);
+		polybatch.setColor(0, 0, 0, 0.25f);
 
 		for(int i = 0; i < toRender.size(); i++) {
 			Entity entity = toRender.get(i);
@@ -1087,7 +1093,7 @@ public class LibDisplay {
 		camera.update();
 
 		// we're going to render to a frame buffer and return that as a pixmap
-		FrameBuffer framebuffer = new FrameBuffer(Pixmap.Format.RGBA8888, width, height,
+		FrameBuffer framebuffer = new FrameBuffer(Pixmap.Format.RGB888, width, height,
 				false);
 		framebuffer.begin();
 		ScreenUtils.clear(0, 0, 1, 0);
@@ -1129,12 +1135,12 @@ public class LibDisplay {
 		structureShader.setUniformf("hue", agent.getHue());
 		structureShader.setUniformf("width", width);
 		structureShader.setUniformf("height", height);
-		structureShader.setUniformf("id", (float) (Math.random() * 100000));
+		structureShader.setUniformf("id", (float) (Math.random() * 10000));
 		structureShader.setUniformf("segmentWidth", (int) structure.getBounds().getWidth());
 		structureShader.setUniformf("segmentHeight", (int) structure.getBounds().getHeight());
 
 		// the shader does all the work
-		batch.draw(agentSprite, 0, 0, width, height); // fill section with new sprite
+		batch.draw(agentSprite, 0, 0, width, height);
 		batch.end();
 
 		ByteBuffer buf;
@@ -1177,10 +1183,6 @@ public class LibDisplay {
 		}
 
 		return null;
-	}
-
-	public Pixmap getShadowPixmap() {
-		return shadowPixmap;
 	}
 
 	public Map<String, List<Agent>> getUsedTextures() {
@@ -1265,5 +1267,17 @@ public class LibDisplay {
 		}
 
 	}
+
+	public byte[] getShadowPixmapBytes() {
+		return shadowByteArray;
+	}
+
+	public Vector2 getShadowDimensions() {
+		return shadowDimensions;
+	}
+
+//	public Pixmap getShadowPixmap() {
+//		return shadowPixmap;
+//	}
 
 }

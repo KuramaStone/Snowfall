@@ -260,6 +260,10 @@ public class EntityScreen extends DisplayScreen {
 		else {
 			w = (float) entity.getSize();
 			h = (float) entity.getSize();
+		    ox = w / 2;
+			oy = h / 2;
+			x -= ox;
+			y -= oy;
 		}
 
 		float rotation = (float) Math.toDegrees(entity.getRelativeDirection());

@@ -11,6 +11,7 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.ConcurrentModificationException;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -73,16 +74,11 @@ public abstract class Entity implements QuadSortable, Comparable<Entity> {
 
 		this.acceleration = new Vector2();
 		this.velocity = new Vector2();
-		attachedEntities = Collections.synchronizedList(new ArrayList<>());
+		attachedEntities = Collections.synchronizedList(new ArrayList<>()); // so complicated but rarely called enough that synchronized is easier for now
 
 	}
 
 	public void tick(World world) {
-		// if(!this.velocity.isFinite()) {
-		// die(world, "violating my laws of conservation");
-		// return;
-		// }
-
 		if(attachedTo != null) {
 			if(!attachedTo.isAlive()) {
 				detach();
@@ -95,10 +91,17 @@ public abstract class Entity implements QuadSortable, Comparable<Entity> {
 			// dyn4j();
 
 			age++;
-			if(isSelected())
-				getAge();
 		}
 
+		if(!shouldExist()) {
+			die(world, "it is imperfect in the eyes of god");
+			return;
+		}
+
+	}
+
+	public boolean shouldExist() {
+		return this.velocity.isFinite() && this.location.isFinite() && !disposed;
 	}
 
 	public void move() {
@@ -110,18 +113,18 @@ public abstract class Entity implements QuadSortable, Comparable<Entity> {
 		if(attachedTo != null)
 			return;
 
-		// acceleration = new Vector2(0, 5000);
-		Vector2 tempVel = velocity.add(acceleration);
-
-		if(!tempVel.isFinite()) {
+		if(!velocity.isFinite()) {
 			die(world, "violating my laws of conservation");
 			return;
 		}
 
+		// acceleration = new Vector2(0, 5000);
+		Vector2 tempVel = velocity.add(acceleration);
+
 		double smoothness = 1;
 		double windResistance = 1.0 / (1 + getSurfaceArea(tempVel.atan2(new Vector2())) * smoothness); // slow down with bigger surface area
 		// decrease acceleration according to how much it is decreased
-		windResistance = windResistance / (1 + Math.pow(tempVel.distanceToSq(new Vector2()), 2)); // slow down as speed increases
+		windResistance = 1 / (1 + Math.pow(tempVel.distanceToSq(new Vector2()), 2)); // slow down as speed increases
 		this.velocity = velocity.add(acceleration.multiply(windResistance));
 		acceleration = acceleration.multiply(0);
 
@@ -137,10 +140,22 @@ public abstract class Entity implements QuadSortable, Comparable<Entity> {
 				this.relative_direction = this.nextRelativeDirection;
 			}
 
-			for(Entity ent : new HashSet<>(attachedEntities)) {
-				ent.moveWithAttachedParent();
+			try {
+				for(int i = 0; i < attachedEntities.size(); i++) {
+					Entity ent = attachedEntities.get(i);
+
+					if(ent != null) {
+						ent.moveWithAttachedParent();
+					}
+				}
+			}
+			catch(ConcurrentModificationException e) {
+				e.printStackTrace();
 			}
 		}
+		
+		if(!velocity.isFinite())
+			die(world, "shame");
 
 	}
 
@@ -159,7 +174,7 @@ public abstract class Entity implements QuadSortable, Comparable<Entity> {
 	public double attachedMass() {
 		double mass = 0;
 		if(attachedEntities != null)
-			for(Entity ent : this.attachedEntities) {
+			for(Entity ent : new ArrayList<>(this.attachedEntities)) {
 				mass += ent.getMass();
 			}
 		return mass;
@@ -219,6 +234,9 @@ public abstract class Entity implements QuadSortable, Comparable<Entity> {
 	}
 
 	protected void applyImpulse(Vector2 force) {
+		if(!force.isFinite())
+			return;
+		
 		Vector2 loc = clampToWorldBorders(this.location.add(force.divide(getTotalMass())));
 		if(!world.getBorders().intersects(loc))
 			setLocation(loc);
@@ -320,8 +338,12 @@ public abstract class Entity implements QuadSortable, Comparable<Entity> {
 	}
 
 	public void detachAll() {
-		new HashSet<Entity>(this.attachedEntities).forEach(e -> e.detach());
-		this.attachedEntities.clear();
+		for(int i = 0; i < attachedEntities.size(); i++) {
+			boolean removed = this.attachedEntities.get(0).detach();
+			if(removed)
+				i--;
+		}
+		this.attachedEntities.clear(); // clear to be safe
 	}
 
 	protected void moveWithCurrent() {
@@ -580,11 +602,15 @@ public abstract class Entity implements QuadSortable, Comparable<Entity> {
 		entity.addAttachedEntity(this);
 	}
 
-	public void detach() {
+	public boolean detach() {
 		if(attachedTo != null) {
-			this.attachedTo.removeAttachedEntity(this);
+			if(this.attachedTo.attachedEntities != null)
+				this.attachedTo.removeAttachedEntity(this);
 			this.attachedTo = null;
+			return true;
 		}
+
+		return false;
 	}
 
 	public void removeAttachedEntity(Entity entity) {
@@ -634,7 +660,7 @@ public abstract class Entity implements QuadSortable, Comparable<Entity> {
 		attachedEntities = null;
 	}
 
-	public boolean isValid() {
+	public boolean isDisposed() {
 		return !disposed;
 	}
 

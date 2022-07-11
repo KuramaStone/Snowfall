@@ -43,6 +43,7 @@ public class Engine extends Game {
 
 	public boolean isLoading = false;
 	public boolean finishedLoading = false;
+	private long currentThreadID;
 
 	public Engine(String[] args) throws Exception {
 		this.args = args;
@@ -51,7 +52,6 @@ public class Engine extends Game {
 		fps_history = new ArrayList<>(100);
 
 		// cursor = new Vector2(display.getFrame().getWidth() / 2, display.getFrame().getHeight() / 2);
-
 	}
 
 	public void start() {
@@ -95,6 +95,7 @@ public class Engine extends Game {
 	long lastUpdate = System.nanoTime();
 
 	public void tick() {
+		currentThreadID = Thread.currentThread().getId();
 		delay = (long) (1.0e9 / fps);
 
 		try {
@@ -127,7 +128,6 @@ public class Engine extends Game {
 	@Override
 	public void create() {
 		libDisplay.create();
-		Gdx.input.setInputProcessor(new InputDetector(this));
 	}
 
 	public String loadingStage;
@@ -163,6 +163,8 @@ public class Engine extends Game {
 						(int) world.getBorders().getBounds().getWidth(), (int) world.getBorders().getBounds().getHeight());
 				if(!world.wasLoadedFromSave())
 					world.configureAllAgents();
+				
+				Gdx.input.setInputProcessor(new InputDetector(this));
 				setRenderingMode(RenderingMode.ENTITIES);
 			});
 
@@ -329,6 +331,10 @@ public class Engine extends Game {
 
 	public String getSaveLocationPath() {
 		return saveLocationPath;
+	}
+	
+	public long getCurrentThreadID() {
+		return currentThreadID;
 	}
 
 }

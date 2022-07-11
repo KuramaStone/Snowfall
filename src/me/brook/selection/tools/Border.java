@@ -170,6 +170,7 @@ public class Border extends Area implements Serializable, Bounds {
 
 		framebuffer.end();
 		framebuffer.dispose();
+		batch.dispose();
 	}
 
 	public static double cosInterpolate(double y1, double y2, double fraction) {

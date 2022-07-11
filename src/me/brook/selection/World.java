@@ -24,8 +24,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Random;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.function.Predicate;
 
 import org.nustaq.serialization.FSTConfiguration;
@@ -121,10 +123,11 @@ public class World {
 	public double totalEnergyUsed, totalLightGained, totalChemsGained, totalPreyGained, totalScavGained;
 
 	private List<CalculateTask> threads;
-	private List<Entity> threadEntities;
-	private boolean multithreading = false;
+	private ConcurrentLinkedQueue<Entity> threadEntities;
 	private boolean[] threadsFinished = new boolean[getThreadCount()];
 	private int seed;
+
+	private int lastLivingPopulation;
 
 	public World(Engine engine, String startingBrainPath, boolean mutate) throws FileNotFoundException {
 		df.setGroupingSize(3);
@@ -323,7 +326,7 @@ public class World {
 		agent.getBrain().getPhenotype().addPhenotype("child_portion", new Pheno(0.7, 0.2, 0.1, 0.8));
 
 		agent.getBrain().getPhenotype().addPhenotype("hue", new Pheno(.3, 0.05, 0, 1, true));
-		agent.getBrain().getPhenotype().addPhenotype("metabolism", new Pheno(0.5, 0.1, 0, 1, false));
+		agent.getBrain().getPhenotype().addPhenotype("metabolism", new Pheno(0.5, 0.1, 0.1, 1, false));
 		agent.getBrain().getPhenotype().addPhenotype("density", new Pheno(1.5, 0.1, 1, 2, false));
 		agent.getBrain().getPhenotype().addPhenotype("speed", new Pheno(1.5, 0.1, 1, 10, false));
 
@@ -336,17 +339,21 @@ public class World {
 	}
 
 	public void adjustSkillFactor() {
-		int living = getLivingPopulation();
+		int living = lastLivingPopulation;
 		double c = 100;
 		skillFactor = skillFactor * Math.exp((maxPopulation - living) / (maxPopulation * c));
-		
+
 		if(skillFactor > 1)
 			skillFactor = 1;
 
-//		System.out.println(skillFactor);
+		// System.out.println(skillFactor);
 	}
 
 	public void update() throws InterruptedException {
+		if(updateResults != null && !areResultsReady())
+			return;
+		lastLivingPopulation = calculateLivingPopulation();
+
 		entities.removeIf(e -> e == null);
 		scheduledDisposes();
 		createSpatialHash();
@@ -378,9 +385,6 @@ public class World {
 				double highest = Double.MIN_VALUE;
 				for(Species<Agent> sp : this.species) {
 					sp.trimDeadEntities(0);
-					if(getLivingPopulation() == 0) {
-						getBestBrainImage();
-					}
 					for(Agent a : sp) {
 
 						double h = a.getFitness();
@@ -441,6 +445,16 @@ public class World {
 		// }
 		// }
 
+	}
+
+	private boolean areResultsReady() {
+
+		for(Future<String> future : this.updateResults) {
+			if(!future.isDone())
+				return false;
+		}
+
+		return true;
 	}
 
 	private void trimEntities() {
@@ -513,10 +527,12 @@ public class World {
 	}
 
 	public static int getThreadCount() {
-		return 8;
+		return 32;
 	}
 
 	private ExecutorService executor;
+
+	private List<Future<String>> updateResults;
 
 	private void calculateAgents() {
 		if(executor == null)
@@ -525,19 +541,21 @@ public class World {
 		if(this.threads == null)
 			startThreads(getThreadCount());
 
-		this.threadEntities = new ArrayList<>(this.entities);
+		this.threadEntities = new ConcurrentLinkedQueue<Entity>(this.entities);
 
-		multithreading = true;
 		try {
-			// this.threads.forEach(t -> t.call());
-			executor.invokeAll(this.threads);
+			if(this.threads.size() == 1)
+				this.threads.forEach(t -> t.call());
+			else {
+				List<Future<String>> results = new ArrayList<>(this.threads.size());
+				this.threads.forEach(t -> results.add(executor.submit(t)));
+				this.updateResults = results;
+			}
 		}
 		catch(Exception e) {
 			e.printStackTrace();
 		}
 
-		multithreading = false;
-		threadEntities = null;
 	}
 
 	private void startThreads(int threads) {
@@ -883,13 +901,23 @@ public class World {
 			worldSave.put("innovationhistory", this.innovationHistory);
 			worldSave.put("entities", saveStates);
 
-			FileOutputStream fos = new FileOutputStream(new File(sub, "world.json"));
-			ObjectOutputStream oos = new ObjectOutputStream(fos);
+			// run saving inside a thread to prevent lag spike.
+			// all data is locked into the worldSave and won't be changed
+			Thread t = new Thread((Runnable) () -> {
+				try {
+					FileOutputStream fos = new FileOutputStream(new File(sub, "world.json"));
+					ObjectOutputStream oos = new ObjectOutputStream(fos);
 
-			oos.writeObject(worldSave);
+					oos.writeObject(worldSave);
 
-			oos.close();
-			fos.close();
+					oos.close();
+					fos.close();
+				}
+				catch(Exception e) {
+					e.printStackTrace();
+				}
+			});
+			t.run();
 
 		}
 		catch(Exception e1) {
@@ -897,11 +925,6 @@ public class World {
 		}
 
 	}
-
-	private final ThreadLocal<FSTConfiguration> fstConf = ThreadLocal.withInitial(() -> {
-		FSTConfiguration conf = FSTConfiguration.createDefaultConfiguration();
-		return conf;
-	});
 
 	private void deleteFile(File file) {
 
@@ -932,7 +955,7 @@ public class World {
 		return ticksSinceRestart;
 	}
 
-	public int getLivingPopulation() {
+	private int calculateLivingPopulation() {
 		int count = 0;
 
 		for(int i = 0; i < species.size(); i++) {
@@ -941,6 +964,10 @@ public class World {
 		}
 
 		return count;
+	}
+
+	public int getLivingPopulation() {
+		return lastLivingPopulation;
 	}
 
 	private Texture bestBrainImage;
@@ -1120,7 +1147,7 @@ public class World {
 		double yValue = Math.abs(location.y - bounds.getMaxY()) / (bounds.getHeight());
 		yValue = Math.max(0, Math.min(1, yValue));
 
-		double chemicalLevels = Math.pow(yValue, 4);
+		double chemicalLevels = Math.pow(yValue, 7);
 		chemicalLevels = Math.max(0, Math.min(1, chemicalLevels));
 
 		return chemicalLevels;
@@ -1129,7 +1156,7 @@ public class World {
 	private List<Agent> toBuild = new ArrayList<>();
 
 	public void addEntity(Entity entity) {
-		if(multithreading) {
+		if(isMultithreading()) {
 			scheduleAdditions.add(entity);
 			return;
 		}
@@ -1145,14 +1172,13 @@ public class World {
 			toBuild.add((Agent) entity);
 		}
 
-		if(entity.isAgent()) {
-			entity.buildBody();
-			((Agent) entity).buildHitbox();
-		}
-
 		if(entity.getColor() == null) {
 			System.out.println("null color");
 		}
+	}
+
+	private boolean isMultithreading() {
+		return Thread.currentThread().getId() != engine.getCurrentThreadID();
 	}
 
 	public void addAllEntities(Iterable<? extends Entity> entities) {
@@ -1162,7 +1188,7 @@ public class World {
 	private List<Disposable> toDispose;
 
 	public void removeEntity(Entity entity) {
-		if(multithreading) {
+		if(isMultithreading()) {
 			scheduledRemovals.add(entity);
 		}
 		else {
@@ -1194,19 +1220,19 @@ public class World {
 
 	public double getDaytimeLightFactor() {
 		// sun intensity is equal to cos the elevation angle. elevation angle is the angle from the horizon
-		return 1;// Math.max(0.15, Math.cos(angleOfSun - Math.PI / 2)); // minimum sun of 0
+		return Math.max(0.1, Math.cos(angleOfSun - Math.PI / 2)); // minimum sun of 0
 	}
 
 	public double getAngleOfSun() {
 		return angleOfSun;
 	}
 
-	private int dayLength = 25000;
+	private int dayLength = 10000;
 
 	public void updateSun() {
 		double thetaPerTick = (Math.PI * 2) / dayLength;
 
-		angleOfSun = (Math.PI / 4) + this.ticksSinceRestart * thetaPerTick;
+		angleOfSun = (Math.PI / 8) + this.ticksSinceRestart * thetaPerTick;
 		while(angleOfSun > Math.PI * 2)
 			angleOfSun -= Math.PI * 2;
 		while(angleOfSun < 0)
@@ -1222,28 +1248,34 @@ public class World {
 		return null;
 	}
 
-	public boolean shouldRunThreads() {
-		return multithreading;
-	}
-
-	public List<Entity> getThreadEntities() {
+	public ConcurrentLinkedQueue<Entity> getThreadEntities() {
 		return threadEntities;
 	}
 
 	public float getShadowsAt(Vector2 vector) {
 		Rectangle2D bounds = this.getBorders().getBounds2D();
-		Pixmap map = engine.getDisplay().getShadowPixmap();
+		byte[] map = engine.getDisplay().getShadowPixmapBytes();
 		if(map == null)
 			return 1;
 
-		float x = (float) (((vector.x - bounds.getMinX()) / bounds.getWidth()) * map.getWidth());
-		float y = (float) (((vector.y - bounds.getMinY()) / bounds.getHeight()) * map.getHeight());
+		Vector2 shadowDims = engine.getDisplay().getShadowDimensions();
 
-		float shadows =  map.getPixel((int) x, (int) y) / -256f;
-		
+		int x = (int) (Math.max(0, Math.min(1, (vector.x - bounds.getMinX()) / bounds.getWidth())) * shadowDims.getX());
+		int y = (int) (Math.max(0, Math.min(1, (vector.y - bounds.getMinY()) / bounds.getHeight())) * shadowDims.getY());
+
+		int index = (int) Math.round(x + y * (shadowDims.getX()));
+		if(index >= map.length)
+			index = map.length - 1; // sometimes rounds above this value or a bug. idk, either way this will stop it
+		int shadowByte = Byte.toUnsignedInt(map[index]);
+
+		// System.out.println(shadowByte);
+		float shadows = 1 - (shadowByte / 256f);
+		if(shadows > 1)
+			getAngleOfSun();
+
 		// look, it needs this for some reason. The shader won't round this to zero
 		shadows = (shadows - 0.00390625f) * (1.0f / (1 - 0.00390625f));
-		
+
 		return shadows;
 	}
 

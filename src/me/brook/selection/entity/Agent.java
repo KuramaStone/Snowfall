@@ -27,6 +27,7 @@ import me.brook.selection.entity.body.Segment;
 import me.brook.selection.entity.body.Structure;
 import me.brook.selection.entity.body.Structure.Face;
 import me.brook.selection.tools.Border;
+import me.brook.selection.tools.Icecore;
 import me.brook.selection.tools.Vector2;
 
 public abstract class Agent extends Entity implements GeneticCarrier, Serializable {
@@ -282,7 +283,7 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 		}
 
 		// calculate maturity
-		this.maturity = (this.age / ((structure.getStructure().size() * 150.0) / baseMetabolism));
+		this.maturity = (this.age / ((structure.getStructure().size() * 1000.0) / baseMetabolism));
 		this.currentMetabolism = (0.5 + this.baseMetabolism) * (1 - Math.max(0, this.maturity - 1));
 		if(currentMetabolism < 0) {
 			currentMetabolism = 0;
@@ -481,7 +482,7 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 			// always prefer those with more energy
 			for(Entry<Entity, EntityViewInfo> eyeData : lastNearbyEntities) {
 				if(eyeData != null) {
-					if(!eyeData.getKey().isValid())
+					if(!eyeData.getKey().shouldExist())
 						continue;
 					if(eyeData.getKey().isAgent()) {
 						Agent ent = (Agent) eyeData.getKey();
@@ -653,10 +654,10 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 		// you always receive at least 50% of the energy and can get an additional 50% if you perfectly match
 
 		if(isBerry) {
-			return 0.5 + (dietGene * 0.5) / 2;
+			return (0.5 + (dietGene * 0.5) / 2);
 		}
 		else {
-			return 0.5 + -(dietGene * 0.5) / 2;
+			return (0.5 + -(dietGene * 0.5) / 2);
 		}
 
 	}
@@ -735,9 +736,7 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 		}
 	};
 
-	protected static DistanceToOriginSorter eyeDistanceSorter = new DistanceToOriginSorter();
-
-	private static class DistanceToOriginSorter implements Comparator<Entry<Entity, EntityViewInfo>> {
+	public static class DistanceToOriginSorter implements Comparator<Entry<Entity, EntityViewInfo>> {
 
 		@Override
 		public int compare(Entry<Entity, EntityViewInfo> o1, Entry<Entity, EntityViewInfo> o2) {
@@ -811,6 +810,7 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 			double o = out[i];
 
 			if(Double.isNaN(o) || Double.isInfinite(o)) {
+				out[i] = 0;
 				throw new IllegalArgumentException("Output " + i + " is Infinite/NaN");
 			}
 		}
@@ -897,13 +897,10 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 		if(age < 10)
 			return;
 
-		double mass = getMass();
-		// default existence energy drain
-
-		double sizeUsage = structure.getStructure().size() * 0.5;
+		double sizeUsage = structure.getStructure().size() * 1 * currentMetabolism;
 		double brainUsage = Math.pow(brain.getConnections().size() + brain.getTotalNeurons().size(), 2) * 0;
 		double movementUsage = (lastForceOutput * getMass()) * 0.0000003 * 0;
-		double used = (sizeUsage + brainUsage + movementUsage) * energyModifier * Math.max(0.1, currentMetabolism);
+		double used = (sizeUsage + brainUsage + movementUsage) * energyModifier;
 		// if(this.isSelected())
 		// System.out.println(sizeUsage / energy);
 
@@ -1213,7 +1210,7 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 
 	public static double relativeAngleTo(Vector2 from, Vector2 to) {
 		// double angle = Math.atan2(to.y, to.x) - Math.atan2(from.y, from.x);
-		double angle = Math.atan2(to.y, to.x) - Math.atan2(from.y, from.x);
+		double angle = Icecore.atan2(to.y, to.x) - Icecore.atan2(from.y, from.x);
 
 		if(angle > Math.PI)
 			angle -= 2 * Math.PI;
@@ -1528,29 +1525,30 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 		// create hitbox at temp location
 		Hitbox hitbox = this.buildHitbox(temp, rotation);
 
-		for(NearbyEntry near : lastNearbyEntities) {
+		if(lastNearbyEntities != null)
+			for(NearbyEntry near : lastNearbyEntities) {
 
-			if(near != null) {
+				if(near != null) {
 
-				if(near.entity.isAgent()) {
+					if(near.entity.isAgent()) {
 
-					Agent rude = (Agent) near.entity;
-					List<CellCollisionInfo> collision = hitbox.intersectsHitbox(rude.hitbox);
+						Agent rude = (Agent) near.entity;
+						List<CellCollisionInfo> collision = hitbox.intersectsHitbox(rude.hitbox);
 
-					if(collision != null && !collision.isEmpty()) {
-						collisionInfo.put(rude, collision);
+						if(collision != null && !collision.isEmpty()) {
+							collisionInfo.put(rude, collision);
+						}
 					}
-				}
-				else {
-					List<CellCollisionInfo> collision = hitbox.intersectsPoint(near.entity.getLocation(), (near.entity.size / 2 + Agent.getSizeOfSegment() / 2));
-					if(collision != null && !collision.isEmpty()) {
-						collisionInfo.put(near.entity, collision);
+					else {
+						List<CellCollisionInfo> collision = hitbox.intersectsPoint(near.entity.getLocation(), (near.entity.size / 2 + Agent.getSizeOfSegment() / 2));
+						if(collision != null && !collision.isEmpty()) {
+							collisionInfo.put(near.entity, collision);
+						}
 					}
+
 				}
 
 			}
-
-		}
 
 		return collisionInfo;
 	}
