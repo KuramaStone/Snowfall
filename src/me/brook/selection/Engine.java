@@ -162,7 +162,6 @@ public class Engine extends Game {
 				world.getBorders().addWorldMap(world.getSeed(),
 						(int) world.getBorders().getBounds().getWidth(), (int) world.getBorders().getBounds().getHeight());
 				loadingStage = "Spawning agents";
-				if(!world.wasLoadedFromSave())
 					world.configureAllAgents();
 				loadingStage = "Building agents";
 				

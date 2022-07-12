@@ -7,15 +7,26 @@ import me.brook.selection.World;
 import me.brook.selection.tools.Vector2;
 
 public class Corpse extends Entity {
+	
+	private double mass;
 
-	public Corpse(World world, double energy, Vector2 location) {
+	public Corpse(World world, double mass, double energy, Vector2 location) {
 		super(world, energy, location, new Color(196, 92, 90), 1);
 		setIconID("assets/berry.png");
+		this.mass = mass;
 
 		size = Math.sqrt(energy / Math.PI) * 0.33; // inverse of entity formula to use same size
 
 		setDigestionDifficulty(0.05);
 		sensorHormones = buildHormones(1, 0, 0, (float) energy, 0, 0, 0);
+	}
+	
+	@Override
+	public SaveState createSaveState() {
+		SaveState state = super.createSaveState();
+		state.map.put("corpseMass", this.mass);
+		
+		return state;
 	}
 
 	@Override
@@ -27,6 +38,11 @@ public class Corpse extends Entity {
 	public void addEnergy(double energy) {
 		super.addEnergy(energy);
 		sensorHormones = buildHormones(1, 0, 0, (float) energy, 0, 0, 0);
+	}
+	
+	@Override
+	public double getMass() {
+		return mass;
 	}
 	
 	@Override

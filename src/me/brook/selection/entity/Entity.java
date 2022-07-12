@@ -61,7 +61,7 @@ public abstract class Entity implements QuadSortable, Comparable<Entity> {
 	private Vector2 relativeAttachment;
 	protected float[] sensorHormones;
 	private boolean disposed = false;
-
+	
 	public Entity(World world, double energy, Vector2 location, Color color, double size) {
 		this.world = world;
 		this.energy = energy;
@@ -72,7 +72,6 @@ public abstract class Entity implements QuadSortable, Comparable<Entity> {
 		this.acceleration = new Vector2();
 		this.velocity = new Vector2();
 		attachedEntities = Collections.synchronizedList(new ArrayList<>()); // so complicated but rarely called enough that synchronized is easier for now
-
 	}
 
 	public void tick(World world) {
@@ -124,7 +123,7 @@ public abstract class Entity implements QuadSortable, Comparable<Entity> {
 		windResistance = 1 / (1 + Math.pow(velocity.distanceToRaw(new Vector2()), 1)); // slow down as speed increases
 		this.velocity = velocity.multiply(windResistance);
 
-		Map<Entity, List<CellCollisionInfo>> results = validate(temp, nextRelativeDirection);
+		Map<Entity, List<CellCollisionInfo>> results = broadphaseCollision(temp, nextRelativeDirection);
 
 		if(resolveCollisions(results)) {
 
@@ -196,7 +195,7 @@ public abstract class Entity implements QuadSortable, Comparable<Entity> {
 		return true;
 	}
 
-	protected Map<Entity, List<CellCollisionInfo>> validate(Vector2 temp, float rotation) {
+	protected Map<Entity, List<CellCollisionInfo>> broadphaseCollision(Vector2 temp, float rotation) {
 		return null;
 	}
 
@@ -348,12 +347,12 @@ public abstract class Entity implements QuadSortable, Comparable<Entity> {
 
 	protected void moveWithCurrent() {
 		double currentTheta = world.getCurrentThetaAt(this.location);
-		double currentForce = 1000;
+		double currentForce = 1 * getSurfaceArea((float) currentTheta);
 
 		if(this.isAgent())
-			this.applyForce(currentTheta, currentForce * 0);
+			this.applyForce(currentTheta, currentForce * 0.03);
 		else
-			this.applyForce(currentTheta, currentForce);
+			this.applyForce(currentTheta, currentForce * 50);
 	}
 
 	public boolean isAgent() {
@@ -459,7 +458,7 @@ public abstract class Entity implements QuadSortable, Comparable<Entity> {
 			entity = life;
 		}
 		else if(classname.equals("Corpse")) {
-			entity = new Corpse(world, energy, location);
+			entity = new Corpse(world, (double) state.map.get("corpseMass"), energy, location);
 		}
 
 		entity.setLocation(location);
@@ -474,61 +473,6 @@ public abstract class Entity implements QuadSortable, Comparable<Entity> {
 
 	public void setAge(int age) {
 		this.age = age;
-	}
-
-	public static Entity load(World world, ThreadLocal<Kryo> kryoLocal, String filePath) throws Exception {
-
-		try {
-			File file = new File(filePath);
-			if(!file.exists()) {
-				throw new FileNotFoundException("Cannot find file: " + filePath);
-			}
-
-			Input input = new Input(new FileInputStream(filePath));
-
-			Object ob = kryoLocal.get().readClassAndObject(input);
-			input.close();
-
-			SaveState state = (SaveState) ob;
-
-			Entity entity = null;
-
-			Vector2 location = (Vector2) state.map.get("location");
-			double energy = (double) state.map.get("energy");
-			int age = (int) state.map.get("age");
-			String classname = (String) state.map.get("class");
-
-			if(classname.equals("AgentLife")) {
-				double rotation = (double) state.map.get("rotation");
-				NeatNetwork brain = (NeatNetwork) state.map.get("brain");
-				int generation = (int) state.map.get("generations");
-				int children = (int) state.map.get("children");
-
-				AgentLife life = new AgentLife(world, null, null, 0, 0, new Vector2(), false);
-				life.setRelativeDirection(rotation);
-				life.setBrain(brain);
-				life.generation = generation;
-				life.children = children;
-
-				entity = life;
-			}
-			else if(classname.equals("Corpse")) {
-				entity = new Corpse(world, energy, location);
-			}
-
-			entity.setLocation(location);
-			entity.energy = energy;
-			entity.age = age;
-
-			return entity;
-
-		}
-		catch(IOException ioe) {
-			ioe.printStackTrace();
-			System.exit(1);
-		}
-
-		return null;
 	}
 
 	public int getAge() {

@@ -377,6 +377,7 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 		parent = null;
 		parentSpecies = null;
 		stomach = null;
+		brain = null;
 	}
 
 	private void reproduction() {
@@ -831,7 +832,7 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 
 		double rotation = out[0];
 
-		double desiredPower = out[1];
+		double desiredPower = 0;
 		if(desiredPower < 0)
 			desiredPower = 0;
 
@@ -860,11 +861,11 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 		lastForceOutput = force;
 
 		// only one energy access method can be used at a time
-		wantsToPhotosynthesize = out[3] > 0;
-		wantsToChemosynthesize = out[4] > 0;
+		wantsToPhotosynthesize = out[3] >= 0;
+		wantsToChemosynthesize = out[4] >= 0;
 		// wantsToEjectFood = out[6];
 		wantsToHeal = out[5];
-		wantsToAttack = out[6] > 0;
+		wantsToAttack = out[6] >= 0;
 		wantsToHold = out[7] > 0;
 		wantsToDigest = Math.max(out[8], 0);
 
@@ -1538,7 +1539,7 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 	}
 
 	@Override
-	protected Map<Entity, List<CellCollisionInfo>> validate(Vector2 temp, float rotation) {
+	protected Map<Entity, List<CellCollisionInfo>> broadphaseCollision(Vector2 temp, float rotation) {
 		// check if location is valid e.g. it has no intersections
 
 		collisionInfo.clear();

@@ -78,6 +78,7 @@ public class World {
 	private int lastMedianAge;
 
 	private boolean realTime = true;
+	private long startTimeFromSave;
 
 	private boolean spawnBerries = true;
 	private double foodValue = 15000;
@@ -241,13 +242,14 @@ public class World {
 
 				innovationHistory = (InnovationHistory) worldSave.get("innovationhistory");
 				ticksSinceRestart = (int) worldSave.get("ticksSinceRestart");
+				this.startTimeFromSave = this.ticksSinceRestart;
 				seed = (int) worldSave.get("seed");
 
 				SaveState[] savedEntities = (SaveState[]) worldSave.get("entities");
 				// load each brain
 
-				if(savedEntities == null) {
-					System.err.println("Couldn't load 'savedEntities'. Object is null.");
+				if(savedEntities == null || savedEntities.length == 0) {
+					System.err.println("Couldn't load 'savedEntities'. Object is null or empty.");
 					System.exit(1);
 				}
 
@@ -280,7 +282,6 @@ public class World {
 					});
 
 				}
-
 				loadedEntities.forEach(e -> addEntity(e));
 				loadedEntities.forEach(e -> e.init());
 
@@ -302,8 +303,6 @@ public class World {
 	}
 
 	public void configureAllAgents() {
-
-		int total = speciesManager.getAllGeneticCarriers().size();
 
 		float index = 0;
 		for(Species<Agent> sp : speciesManager.getSpecies().values()) {
@@ -369,7 +368,7 @@ public class World {
 		lastLivingPopulation = calculateLivingPopulation();
 
 		// make sure to save after threads are guaranteed to be finished
-		if(this.ticksSinceRestart != 0 && this.ticksSinceRestart % 25000 == 0) {
+		if(this.ticksSinceRestart != 0 && this.ticksSinceRestart % 25000 == 0 && this.ticksSinceRestart != startTimeFromSave) {
 			save(true);
 		}
 
@@ -389,6 +388,9 @@ public class World {
 		checkAdditionsRemovals();
 		adjustSkillFactor();
 
+		if(this.toBuild.size() > lastLivingPopulation * 1.1)
+			System.err.println("toBuild array too full.");
+		
 		if(realTime) {
 			if((this.ticksSinceRestart) % 500 == 0) {
 
@@ -617,11 +619,6 @@ public class World {
 		return tex;
 	}
 
-	public void buildAgents() {
-		toBuild.forEach(e -> e.buildBody());
-		toBuild.clear();
-	}
-
 	public List<Agent> getToBuild() {
 		return toBuild;
 	}
@@ -791,7 +788,7 @@ public class World {
 		if(bestBrainImage != null)
 			bestBrainImage.dispose();
 
-		if(agent == null) {
+		if(agent == null || !agent.shouldExist()) {
 			this.bestBrainImage = null;
 			return;
 		}
@@ -809,15 +806,17 @@ public class World {
 		child.reset();
 		child.init();
 
-		double x = (int) (((random.nextDouble() * 2 - 1) * (worldWidth)));
-		double y = (int) (((random.nextDouble() * 2 - 1) * (worldHeight)));
+		if(!wasLoadedFromSave) {
+			double x = (int) (((random.nextDouble() * 2 - 1) * (worldWidth)));
+			double y = (int) (((random.nextDouble() * 2 - 1) * (worldHeight)));
 
-		while(!borders.contains(x, y) || borders.intersects(new Vector2(x, y))) {
-			x = (int) (((random.nextDouble() * 2 - 1) * (worldWidth)));
-			y = (int) (((random.nextDouble() * 2 - 1) * (worldHeight)));
+			while(!borders.contains(x, y) || borders.intersects(new Vector2(x, y))) {
+				x = (int) (((random.nextDouble() * 2 - 1) * (worldWidth)));
+				y = (int) (((random.nextDouble() * 2 - 1) * (worldHeight)));
+			}
+
+			child.setLocation(new Vector2(x, y));
 		}
-
-		child.setLocation(new Vector2(x, y));
 	}
 
 	public ArrayList<Entity> getEntities() {
@@ -835,8 +834,6 @@ public class World {
 	public Border getBorders() {
 		return borders;
 	}
-
-	private static FSTConfiguration fstConf = FSTConfiguration.createJsonConfiguration(false, true);
 
 	public void save(boolean autosave) {
 
@@ -923,11 +920,14 @@ public class World {
 				try {
 					FileOutputStream fos = new FileOutputStream(new File(sub, "world.json"));
 					FSTObjectOutput out = new FSTObjectOutput(fos);
-
 					out.writeObject(worldSave, HashMap.class);
 
 					out.close();
 					fos.close();
+					out = null;
+					fos = null;
+
+					FSTConfiguration.clearGlobalCaches();
 				}
 				catch(Exception e) {
 					e.printStackTrace();
@@ -1024,7 +1024,7 @@ public class World {
 		if(agent.willDropCorpse() && !Double.isNaN(agent.getTotalBodyEnergy())) {
 			if(Double.isNaN(agent.getTotalBodyEnergy()))
 				getCurrentGeneration();
-			Corpse corpse = new Corpse(this, (agent.getTotalBodyEnergy()), agent.getLocation());
+			Corpse corpse = new Corpse(this, agent.getMass(), (agent.getTotalBodyEnergy()), agent.getLocation());
 			corpse.setVelocity(agent.getVelocity());
 			addEntity(corpse);
 		}
@@ -1181,6 +1181,7 @@ public class World {
 		entities.add(entity);
 
 		if(entity.isAgent()) {
+			((Agent) entity).buildBody();
 			toBuild.add((Agent) entity);
 		}
 
@@ -1202,6 +1203,8 @@ public class World {
 	public void removeEntity(Entity entity) {
 		if(isMultithreading()) {
 			scheduledRemovals.add(entity);
+			if(toBuild.contains(entity))
+				toBuild.remove(entity);
 		}
 		else {
 			this.entities.remove(entity);
@@ -1213,6 +1216,8 @@ public class World {
 			}
 
 			entity.dispose();
+			if(toBuild.contains(entity))
+				toBuild.remove(entity);
 		}
 
 	}

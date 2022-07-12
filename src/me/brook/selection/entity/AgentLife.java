@@ -67,7 +67,7 @@ public class AgentLife extends Agent {
 		}
 		if(!shouldExist())
 			return;
-
+		
 		super.tick(world);
 		ejectFood();
 		attack();
@@ -99,9 +99,11 @@ public class AgentLife extends Agent {
 	private void heal() {
 		if(wantsToHeal >= 0 && health < maxHealth) {
 			// max heal speed of (size*metabolism) per second and 1 hp = 1000 energy
-			double add = wantsToHeal * getMass() * density * currentMetabolism;
-			double energyCost = add * getEnergyPerHP();
-			addEnergy(-energyCost);
+			double energyToUse = wantsToHeal * getMass() * currentMetabolism * 3;
+			energyToUse = Math.min(energyToUse, this.energy);
+			addEnergy(-energyToUse);
+			
+			double add = energyToUse / getEnergyPerHP();
 
 			this.health += add;
 			if(health > maxHealth)
@@ -525,31 +527,31 @@ public class AgentLife extends Agent {
 	}
 
 	public void ejectFood() {
-		if(wantsToEjectFood <= 2)
-			return;
-
-		double energyToEject = (getMass() * size) * wantsToEjectFood;
-
-		Vector2 spawnAt = this.getLocation().add(new Vector2(this.relative_direction).multiply(size));
-		if(!world.getBorders().contains(spawnAt.x, spawnAt.y)) {
-			return;
-		}
-
-		energyToEject = Math.min(this.getEnergy(), energyToEject); // cant eject more than remaining energy
-
-		// dont allow too small ejections. thousands of 1 energy dots sounds lame
-		if(energyToEject < 5000) {
-			return;
-		}
-
-		this.addEnergy(-energyToEject);
-		// reduce actual energy in pellet. a bit of waste to make it not 100% efficient
-		energyToEject *= 0.5;
-
-		Corpse corpse = new Corpse(world, energyToEject, spawnAt);
-		world.addEntity(corpse);
-		// add ejection speed to corpse
-		corpse.applyForce(this.relative_direction, getMass() * 10);
+//		if(wantsToEjectFood <= 2)
+//			return;
+//
+//		double energyToEject = (getMass() * size) * wantsToEjectFood;
+//
+//		Vector2 spawnAt = this.getLocation().add(new Vector2(this.relative_direction).multiply(size));
+//		if(!world.getBorders().contains(spawnAt.x, spawnAt.y)) {
+//			return;
+//		}
+//
+//		energyToEject = Math.min(this.getEnergy(), energyToEject); // cant eject more than remaining energy
+//
+//		// dont allow too small ejections. thousands of 1 energy dots sounds lame
+//		if(energyToEject < 5000) {
+//			return;
+//		}
+//
+//		this.addEnergy(-energyToEject);
+//		// reduce actual energy in pellet. a bit of waste to make it not 100% efficient
+//		energyToEject *= 0.5;
+//
+//		Corpse corpse = new Corpse(world, energyToEject, spawnAt);
+//		world.addEntity(corpse);
+//		// add ejection speed to corpse
+//		corpse.applyForce(this.relative_direction, getMass() * 10);
 	}
 
 	private double lastShadowValue;
@@ -578,6 +580,10 @@ public class AgentLife extends Agent {
 
 		// if(isSelected())
 		// System.out.println(gain);
+		
+		if(isSelected()) {
+//			System.out.println(gain);
+		}
 
 		world.totalLightGained += gain;
 		addEnergy(gain);

@@ -210,11 +210,15 @@ public class LibDisplay {
 	public void buildAgents() {
 
 		List<Agent> toBuild = engine.getWorld().getToBuild();
-		toBuild.removeIf(a -> !a.isAlive());
 
 		int max = Math.min(toBuild.size(), 10000);
 		for(int i = 0; i < max; i++) {
-			buildBodyFor(toBuild.remove(0));
+			Agent a = toBuild.remove(0);
+			
+			if(a == null || !a.isAlive()) {
+				continue;
+			}
+			buildBodyFor(a);
 		}
 
 	}
@@ -238,9 +242,8 @@ public class LibDisplay {
 	public void renderShadows(final int width, final int height) {
 		Rectangle2D bounds = engine.getWorld().getBorders().getBounds2D();
 
-		if(shadowBuffer == null)
-			shadowBuffer = new FrameBuffer(Pixmap.Format.Alpha, width, height,
-					false);
+		shadowBuffer = new FrameBuffer(Pixmap.Format.Alpha, width, height,
+				false);
 
 		Matrix4 matrix = new Matrix4();
 		matrix.setToOrtho2D(0, 0, width, height);
@@ -269,6 +272,7 @@ public class LibDisplay {
 		lastShadowTexture.flip(false, true);
 
 		shadowBuffer.end();
+		shadowBuffer.dispose();
 
 		int length = buf.limit();
 		byte[] array = new byte[length];
@@ -415,36 +419,12 @@ public class LibDisplay {
 		if(startBatch)
 			batch.begin();
 
-		StringBuilder popRatios = new StringBuilder();
-		int k = 0;
-		boolean broke = false;
-		for(Population<?> pop : engine.getWorld().getPopulations()) {
-			if(k == 10) {
-				broke = true;
-				break;
-			}
-			if(pop.getLivingPopulation() != 0) {
-				popRatios.append(pop.getLivingPopulation() + ":");
-				k++;
-			}
-		}
-		String finalPop = "";
-		if(!popRatios.isEmpty()) {
-			finalPop = popRatios.substring(0, popRatios.length() - 1);
-			if(broke) {
-				finalPop = finalPop + "...";
-			}
-		}
-
-		String popString = String.format("%s || %s", (int) engine.getWorld().getLivingPopulation(),
-				finalPop);
-
+		String finalPop = String.format("All: %s, Agents: %s", this.engine.getWorld().getEntities().size(),
+				this.engine.getWorld().getSpeciesManager().getAllGeneticCarriers().size());
 		// draw world info
 		String time = getTimeFrom(engine.getWorld().getAngleOfSun());
 		String timeInfo = String.format("Time: %s : %s", time, engine.getWorld().getTime());
 		String fpsInfo = String.format("FPS: %s, %s", engine.getAverageFps(), Gdx.graphics.getFramesPerSecond());
-		String popInfo = String.format("Pop: %s", popString);
-		String entityInfo = String.format("Entities: %s", (engine.getWorld().getEntities().size()));
 		String ecoInfo = String.format("Sun: %s", dfdouble.format(engine.getWorld().getDaytimeLightFactor()));
 		Runtime runtime = Runtime.getRuntime();
 		String heapInfo = String.format("Heap: %skb / %s (%s)", (long) ((runtime.totalMemory() - runtime.freeMemory()) / 1e6), runtime.maxMemory() / 1e6,
@@ -456,10 +436,9 @@ public class LibDisplay {
 		float index = 0.3f;
 
 		font.setColor(Color.RED);
-		font.draw(batch, popInfo, x, index++ * h);
+		font.draw(batch, finalPop, x, index++ * h);
 		font.draw(batch, timeInfo, x, index++ * h);
 		font.draw(batch, ecoInfo, x, index++ * h);
-		font.draw(batch, entityInfo, x, index++ * h);
 		font.draw(batch, fpsInfo, x, index++ * h);
 		font.draw(batch, "Textures: " + TextureTracker.activeTextures, x, index++ * h);
 		font.draw(batch, heapInfo, x, index++ * h);
