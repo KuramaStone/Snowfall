@@ -43,6 +43,7 @@ import me.brook.neat.network.Phenotype.Pheno;
 import me.brook.neat.species.InnovationHistory;
 import me.brook.neat.species.Species;
 import me.brook.neat.species.SpeciesManager;
+import me.brook.selection.LibDisplay.RenderingMode;
 import me.brook.selection.LibDisplay.TextureTracker;
 import me.brook.selection.entity.Agent;
 import me.brook.selection.entity.AgentLife;
@@ -137,7 +138,7 @@ public class World {
 		noveltyTracker.setAllowRepeats(false);
 		random = new Random();
 		foodNoise = new Noise(4, 0.0025 / ((worldHeight) / heatMapScale), 0.5f, 2, random.nextInt(100000), 0);
-		waterCurrents = new Noise(3, 0.5 / worldHeight, 0.5f, 2, 7777777, 0);
+		waterCurrents = new Noise(3, 1 / worldHeight, 0.5f, 2, 7777777, 0);
 		createPhysicsWorld();
 		borders = createBorder(polygonSides, worldWidth, worldHeight);
 		tracker = new Tracker<Double>();
@@ -224,7 +225,7 @@ public class World {
 			// load innovation history
 			try {
 				FileInputStream fis = new FileInputStream(new File(parent, "world.json"));
-				FSTObjectInput  in = new FSTObjectInput(fis);
+				FSTObjectInput in = new FSTObjectInput(fis);
 
 				Object ob = in.readObject(HashMap.class);
 
@@ -338,7 +339,7 @@ public class World {
 		agent.getBrain().getPhenotype().addPhenotype("pref_diet", new Pheno(0, 0.2, -1, 1));
 		agent.getBrain().getPhenotype().addPhenotype("child_portion", new Pheno(0.7, 0.2, 0.1, 0.8));
 
-		agent.getBrain().getPhenotype().addPhenotype("hue", new Pheno(.3, 0.05, 0, 1, true));
+		agent.getBrain().getPhenotype().addPhenotype("hue", new Pheno(.05, 0.05, 0, 1, true));
 		agent.getBrain().getPhenotype().addPhenotype("metabolism", new Pheno(0.5, 0.1, 0.1, 1, false));
 		agent.getBrain().getPhenotype().addPhenotype("density", new Pheno(1.5, 0.1, 1, 2, false));
 		agent.getBrain().getPhenotype().addPhenotype("speed", new Pheno(1.5, 0.1, 1, 10, false));
@@ -367,6 +368,11 @@ public class World {
 			return;
 		lastLivingPopulation = calculateLivingPopulation();
 
+		// make sure to save after threads are guaranteed to be finished
+		if(this.ticksSinceRestart != 0 && this.ticksSinceRestart % 25000 == 0) {
+			save(true);
+		}
+
 		entities.removeIf(e -> e == null);
 		scheduledDisposes();
 		createSpatialHash();
@@ -385,6 +391,7 @@ public class World {
 
 		if(realTime) {
 			if((this.ticksSinceRestart) % 500 == 0) {
+
 				speciesManager.getSpecies().values().forEach(s -> s.removeNull());
 				speciesManager.trim();
 				trimEntities();
@@ -409,13 +416,11 @@ public class World {
 					}
 				}
 
-				if(engine.hasDisplay()) {
-					if(selectedEntity != null && selectedEntity.isAgent())
-						setBestBrainImage((Agent) selectedEntity, engine.getDisplay().getImageWidth(),
-								engine.getDisplay().getImageHeight());
-					else if(best != null)
-						setBestBrainImage(best, engine.getDisplay().getImageWidth(), engine.getDisplay().getImageHeight());
-				}
+				if(selectedEntity != null && selectedEntity.isAgent())
+					setBestBrainImage((Agent) selectedEntity, engine.getDisplay().getImageWidth(),
+							engine.getDisplay().getImageHeight());
+				else if(best != null)
+					setBestBrainImage(best, engine.getDisplay().getImageWidth(), engine.getDisplay().getImageHeight());
 
 				tracker.addData("photosynthesis", Double.valueOf(this.totalLightGained));
 				tracker.addData("chemosynthesis", Double.valueOf(this.totalChemsGained));
@@ -434,10 +439,6 @@ public class World {
 		}
 
 		this.species = new ArrayList<>(speciesManager.getSpecies().values());
-
-		if(this.ticksSinceRestart != 0 && this.ticksSinceRestart % 25000 == 0) {
-			save(true);
-		}
 
 		if(getLivingPopulation() < minimumPopulation) {
 			respawnAgent(false);
@@ -543,7 +544,7 @@ public class World {
 		return 32;
 	}
 
-	private ExecutorService executor;
+	ExecutorService executor;
 
 	private List<Future<String>> updateResults;
 
@@ -586,34 +587,25 @@ public class World {
 	}
 
 	private void createGraphs() {
-		if(engine.hasDisplay()) {
 
-			Gdx.app.postRunnable(new Runnable() {
+		if(displayGraph != null)
+			displayGraph.dispose();
 
-				@Override
-				public void run() {
-					// DISPOSE THE FUCKING TEXTURES
-					if(displayGraph != null)
-						displayGraph.dispose();
+		Pixmap totalGraph = engine.getDisplay().createLayeredGraph(engine.getDisplay().getImageWidth(),
+				engine.getDisplay().getImageHeight(),
+				new com.badlogic.gdx.graphics.Color[] { com.badlogic.gdx.graphics.Color.GREEN,
+						com.badlogic.gdx.graphics.Color.YELLOW, com.badlogic.gdx.graphics.Color.RED,
+						com.badlogic.gdx.graphics.Color.PURPLE },
+				tracker.getTrackerData("photosynthesis").getData(),
+				tracker.getTrackerData("chemosynthesis").getData(), tracker.getTrackerData("predation").getData(),
+				tracker.getTrackerData("scavenged").getData());
+		// Pixmap totalGraph = engine.getDisplay().createLayeredGraph(engine.getDisplay().getImageWidth(),
+		// engine.getDisplay().getImageHeight(),
+		// new com.badlogic.gdx.graphics.Color[] { com.badlogic.gdx.graphics.Color.GOLD },
+		// tracker.getTrackerData("f").getData());
 
-					Pixmap totalGraph = engine.getDisplay().createLayeredGraph(engine.getDisplay().getImageWidth(),
-							engine.getDisplay().getImageHeight(),
-							new com.badlogic.gdx.graphics.Color[] { com.badlogic.gdx.graphics.Color.GREEN,
-									com.badlogic.gdx.graphics.Color.YELLOW, com.badlogic.gdx.graphics.Color.RED,
-									com.badlogic.gdx.graphics.Color.PURPLE },
-							tracker.getTrackerData("photosynthesis").getData(),
-							tracker.getTrackerData("chemosynthesis").getData(), tracker.getTrackerData("predation").getData(),
-							tracker.getTrackerData("scavenged").getData());
-					// Pixmap totalGraph = engine.getDisplay().createLayeredGraph(engine.getDisplay().getImageWidth(),
-					// engine.getDisplay().getImageHeight(),
-					// new com.badlogic.gdx.graphics.Color[] { com.badlogic.gdx.graphics.Color.GOLD },
-					// tracker.getTrackerData("f").getData());
-
-					displayGraph = new TextureTracker(totalGraph);
-					totalGraph.dispose();
-				}
-			});
-		}
+		displayGraph = new TextureTracker(totalGraph);
+		totalGraph.dispose();
 	}
 
 	public Texture createGraphFrom(String string, com.badlogic.gdx.graphics.Color color) {
@@ -723,7 +715,7 @@ public class World {
 	public void setCursorLocation(Vector2 location) {
 		this.cursorEntity = location.copy();
 
-		System.out.println(getShadowsAt(location));
+		System.out.println(String.format("Shadows: %s, Light: %s, Chems: %s", getShadowsAt(location), getLightAt(location), getChemicalAt(location)));
 	}
 
 	public boolean isNearPredator(Vector2 loc, int range) {
@@ -796,9 +788,6 @@ public class World {
 	 */
 
 	public void setBestBrainImage(Agent agent, int width, int height) {
-		if(!engine.hasDisplay())
-			return;
-
 		if(bestBrainImage != null)
 			bestBrainImage.dispose();
 
@@ -850,6 +839,17 @@ public class World {
 	private static FSTConfiguration fstConf = FSTConfiguration.createJsonConfiguration(false, true);
 
 	public void save(boolean autosave) {
+
+		if(isMultithreading()) {
+			int i = 0;
+			while(isMultithreading()) {
+				if(i % 10000 == 0)
+					System.out.println("Waiting for threads to finish before saving...");
+				i++;
+				continue;
+			}
+		}
+
 		System.out.println("Saving...");
 
 		// create new list to avoid thread nonsense
@@ -922,8 +922,8 @@ public class World {
 			Thread t = new Thread((Runnable) () -> {
 				try {
 					FileOutputStream fos = new FileOutputStream(new File(sub, "world.json"));
-					FSTObjectOutput  out = new FSTObjectOutput(fos);
-					
+					FSTObjectOutput out = new FSTObjectOutput(fos);
+
 					out.writeObject(worldSave, HashMap.class);
 
 					out.close();
@@ -1145,10 +1145,10 @@ public class World {
 
 	public double getLightAt(Vector2 location) {
 		Rectangle2D bounds = borders.getBounds2D();
-		double yValue = Math.abs(location.y - bounds.getMinY()) / (bounds.getHeight());
-		yValue = Math.max(0, Math.min(1, yValue));
+		double yValue = Math.abs(location.y - bounds.getMaxY()) / (bounds.getHeight());
+		yValue = Math.max(0, Math.min(1, 1 - yValue));
 
-		double lightLevels = Math.pow(yValue, 1);
+		double lightLevels = Math.pow(yValue, 2);
 		lightLevels = Math.max(0, Math.min(1, lightLevels));
 
 		return lightLevels * getDaytimeLightFactor();
@@ -1232,7 +1232,7 @@ public class World {
 
 	public double getDaytimeLightFactor() {
 		// sun intensity is equal to cos the elevation angle. elevation angle is the angle from the horizon
-		return Math.max(0.1, Math.cos(angleOfSun - Math.PI / 2)); // minimum sun of 0
+		return Math.max(0.25, Math.cos(angleOfSun - Math.PI / 2)); // minimum sun of 0
 	}
 
 	public double getAngleOfSun() {

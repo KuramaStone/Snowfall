@@ -149,9 +149,7 @@ public class AgentLife extends Agent {
 
 						if(attack) {
 
-							double damage = getTotalMass() * 20 * currentMetabolism;
-							damage /= 75;
-
+							double damage = getTotalMass() * currentMetabolism * 0.25;
 							// size modifier
 							damage *= (this.getTotalMass() / (prey.getTotalMass() + this.getTotalMass()));
 
@@ -203,14 +201,20 @@ public class AgentLife extends Agent {
 						}
 
 						if(attack) {
-							// instantly eat other things
-							double energyGained = entity.getTotalBodyEnergy();
+
+							double damage = getTotalMass() * currentMetabolism * 0.25;
+							damage *= 10; // increase eating of corpses since they're dead
+							// size modifier
+							damage *= this.structure.getByType(Structure.HUNT).size();
+
+							double energyGained = damage * getEnergyPerHP();
+							energyGained = Math.min(energyGained, entity.getEnergy());
 
 							EntityBite bite = new EntityBite(entity, energyGained);
 							stomach.add(bite);
 
-							entity.energy = 0;
-							entity.die(world, "eaten while its dead because its a corpse so its not exactly alive but it was still eaten.");
+							entity.addEnergy(-energyGained);
+							// entity.die(world, "eaten while its dead because its a corpse so its not exactly alive but it was still eaten.");
 							world.totalScavGained += energyGained;
 							attacked = true;
 						}
@@ -299,7 +303,6 @@ public class AgentLife extends Agent {
 		// System.out.println("Calculated twice in one tick.");
 		// }
 
-
 		Vector2 location = getLocation();
 
 		// double toSurface = Math.abs(location.y - world.getBorders().getBounds().getMaxY()) + 50;
@@ -362,12 +365,12 @@ public class AgentLife extends Agent {
 		this.lastShadowValue = world.getShadowsAt(this.location);
 
 		Vector2 relVelocity = this.velocity.rotate(new Vector2(), this.relative_direction);
-		
+
 		inputs[index++] = world.getLightAt(location); // 6
 		inputs[index++] = world.getChemicalAt(location);
 		inputs[index++] = 1 / (1 + relVelocity.x);
 		inputs[index++] = 1 / (1 + relVelocity.y);
-		inputs[index++] = 1.0 / (1 + age);
+		inputs[index++] = (this.getMaturity() / 2.0);
 		inputs[index++] = 1.0 / (1 + this.getEnergy());
 		inputs[index++] = 1.0 / (1 + lastNearbyEntities.size());
 		inputs[index++] = relativeAngleTo(Math.PI / 2, relative_direction); // to light is just their direction relative to up
@@ -573,8 +576,8 @@ public class AgentLife extends Agent {
 		gain *= currentMetabolism;
 		// gain *= world.getSkillFactor();
 
-//		if(isSelected())
-//			System.out.println(gain);
+		// if(isSelected())
+		// System.out.println(gain);
 
 		world.totalLightGained += gain;
 		addEnergy(gain);
@@ -594,7 +597,7 @@ public class AgentLife extends Agent {
 		double intensity = getChemsReceived();
 		double dietMod = getDietModifier(false);
 
-		double gain = 50 * intensity;
+		double gain = 35 * intensity;
 		gain *= competition;
 		gain *= dietMod;
 		gain *= currentMetabolism;
@@ -657,13 +660,25 @@ public class AgentLife extends Agent {
 		double geneMultiplier = this.geneMultiplier * 2;
 		double geneFactor = this.geneFactor;
 
-		brain.mutateNetwork(0.2 * geneMultiplier, 0 * geneMultiplier, 0.15 * geneMultiplier, 0.02 * geneMultiplier,
-				0.5 * geneMultiplier,
+		brain.mutateNetwork(
+				0.2 * geneMultiplier, // add conn
+				0 * geneMultiplier, // toggle conn
+				0.05 * geneMultiplier, // delete conn
+				0.02 * geneMultiplier, // new node
+				0.02 * geneMultiplier, // del node
 				new AsexualReproductionRandomizer(0.1 * geneMultiplier, 0.1 * geneFactor),
-				0.1 * geneFactor, 0.05 * geneMultiplier, 0.02 * geneMultiplier); // activation change
+				0.1 * geneFactor, // activation magnitude
+				0.05 * geneMultiplier, // activation chance
+				0.2 * geneMultiplier); // activation value change
 		brain.getPhenotype().mutate(0.15 * geneMultiplier);
 
-		this.bodyDNA = mutateBodyDNA(this.bodyDNA, 0.01 * geneMultiplier, 0.02 * geneMultiplier, 0.3 * geneMultiplier, 0.01 * geneMultiplier, 0.02 * geneMultiplier, 0.01 * geneMultiplier);
+		this.bodyDNA = mutateBodyDNA(this.bodyDNA, 
+				0.01 * geneMultiplier, // node type chance
+				0.02 * geneMultiplier, // direction add chance
+				0.03 * geneMultiplier, //  direction del
+				0.01 * geneMultiplier, // node copy
+				0.02 * geneMultiplier, // node delete
+				0.01 * geneMultiplier); // angle 
 
 		// if(random.nextDouble() < rate)
 		// brain.mutateNeuronsLimited(1, 1, 3, 0, 0, 0, 0);

@@ -85,6 +85,7 @@ public class LibDisplay {
 
 	public TextureRegion lastShadowTexture;
 	public Pixmap shadowPixmap;
+	public FrameBuffer shadowBuffer;
 
 	private Map<String, List<Agent>> usedTextures;
 	private Map<String, Sprite> texturesByDna;
@@ -125,8 +126,6 @@ public class LibDisplay {
 	}
 
 	public void render() {
-
-		
 
 	}
 
@@ -239,15 +238,17 @@ public class LibDisplay {
 	public void renderShadows(final int width, final int height) {
 		Rectangle2D bounds = engine.getWorld().getBorders().getBounds2D();
 
-		FrameBuffer framebuffer = new FrameBuffer(Pixmap.Format.Alpha, width, height,
-				false);
+		if(shadowBuffer == null)
+			shadowBuffer = new FrameBuffer(Pixmap.Format.Alpha, width, height,
+					false);
 
 		Matrix4 matrix = new Matrix4();
 		matrix.setToOrtho2D(0, 0, width, height);
 
 		List<Entity> toRender = new ArrayList<>(engine.getWorld().getEntities());
 
-		framebuffer.begin();
+		shadowBuffer.begin();
+		ScreenUtils.clear(0, 0, 0, 0);
 		drawShadows(polybatch, matrix, toRender, width, height, bounds);
 
 		if(lastShadowTexture != null) {
@@ -267,9 +268,8 @@ public class LibDisplay {
 		lastShadowTexture = new TextureRegion(t);
 		lastShadowTexture.flip(false, true);
 
-		framebuffer.end();
-		framebuffer.dispose();
-		
+		shadowBuffer.end();
+
 		int length = buf.limit();
 		byte[] array = new byte[length];
 		buf.get(array);
@@ -293,13 +293,13 @@ public class LibDisplay {
 
 		PolygonRegion polyRegion;
 
-		Pixmap pix = new Pixmap(1, 1, Pixmap.Format.Intensity);
+		Pixmap pix = new Pixmap(1, 1, Pixmap.Format.Alpha);
 		pix.setColor(new Color(0, 0, 1, 1f));
 		pix.fill();
 
 		Texture texture = new TextureTracker(pix);
 		TextureRegion texRegion = new TextureRegion(texture);
-		polybatch.setColor(0, 0, 0, 0.67f);
+		polybatch.setColor(0, 0, 0, 0.5f);
 
 		for(int i = 0; i < toRender.size(); i++) {
 			Entity entity = toRender.get(i);
@@ -310,41 +310,51 @@ public class LibDisplay {
 					if(box == null)
 						continue;
 
+					// double lightAt = engine.getWorld().getLightAt(agent.getLocation());
+					// if(lightAt < 0.1) {
+					// continue; // we realistically don't need shadows if the natural light is already black
+					// }
+
 					// generate quad stretching from agent corners to back wall and render that shape
 
-					Vector2[] corners = box.getRotatedCorners(box.getOrigin(), box.getCurrentTheta());
+					PolygonRegion region;
+					if(agent.shouldComputeNewShadowRegion()) {
+						Vector2[] corners = box.getRotatedCorners(box.getOrigin(), box.getCurrentTheta());
 
-					Vector2 leftCorner = null;
-					Vector2 rightCorner = null;
-					Vector2 topCorner = null;
-					Vector2 bottomCorner = null;
-					for(Vector2 v2 : corners) {
+						Vector2 leftCorner = null;
+						Vector2 rightCorner = null;
+						Vector2 topCorner = null;
+						Vector2 bottomCorner = null;
+						for(Vector2 v2 : corners) {
 
-						if(leftCorner == null || v2.x < leftCorner.x)
-							leftCorner = v2;
-						if(rightCorner == null || v2.x > rightCorner.x)
-							rightCorner = v2;
-						if(topCorner == null || v2.y > topCorner.y)
-							topCorner = v2;
-						if(bottomCorner == null || v2.y < bottomCorner.y)
-							bottomCorner = v2;
+							if(leftCorner == null || v2.x < leftCorner.x)
+								leftCorner = v2;
+							if(rightCorner == null || v2.x > rightCorner.x)
+								rightCorner = v2;
+							if(topCorner == null || v2.y > topCorner.y)
+								topCorner = v2;
+							if(bottomCorner == null || v2.y < bottomCorner.y)
+								bottomCorner = v2;
+						}
+						leftCorner = toQuadVector(leftCorner, width, height, bounds);
+						rightCorner = toQuadVector(rightCorner, width, height, bounds);
+						topCorner = toQuadVector(topCorner, width, height, bounds);
+						bottomCorner = toQuadVector(bottomCorner, width, height, bounds);
+
+						FloatArray vertices = new FloatArray(new float[] {
+								leftCorner.x, leftCorner.y, bottomCorner.x, bottomCorner.y, rightCorner.x, rightCorner.y,
+								rightCorner.x, (float) bounds.getMinY(), leftCorner.x, (float) bounds.getMinY() });
+						// FloatArray vertices = new FloatArray(new float[] {
+						// 0, 0, 0, resolution, resolution, 0 });
+						ShortArray tris = triangulator.computeTriangles(vertices);
+						region = new PolygonRegion(texRegion, vertices.toArray(), tris.toArray());
+						agent.setComputedShadowRegion(region);
 					}
-					leftCorner = toQuadVector(leftCorner, width, height, bounds);
-					rightCorner = toQuadVector(rightCorner, width, height, bounds);
-					topCorner = toQuadVector(topCorner, width, height, bounds);
-					bottomCorner = toQuadVector(bottomCorner, width, height, bounds);
+					else {
+						region = agent.getComputedShadowRegion();
+					}
 
-					FloatArray vertices = new FloatArray(new float[] {
-							leftCorner.x, leftCorner.y, bottomCorner.x, bottomCorner.y, rightCorner.x, rightCorner.y,
-							rightCorner.x, (float) bounds.getMinY(), leftCorner.x, (float) bounds.getMinY() });
-					// FloatArray vertices = new FloatArray(new float[] {
-					// 0, 0, 0, resolution, resolution, 0 });
-
-					ShortArray tris = triangulator.computeTriangles(vertices);
-
-					polyRegion = new PolygonRegion(texRegion, vertices.toArray(), tris.toArray());
-
-					polybatch.draw(polyRegion, 0, 0);
+					polybatch.draw(region, 0, 0);
 
 					// shapes.rect(low.x, 0, high.x - low.x, low.y);
 				}
@@ -484,14 +494,15 @@ public class LibDisplay {
 				double c1 = agent.getEntitiesBlockingLightFactor(); // nearby agents reduce light for this agent
 				double c2 = agent.getEntitiesBlockingChemsFactor(); // nearby agents reduce light for this agent
 				String attachedInfo = String.format("Attached: %s", (sel.getAttachedTo() == null ? "null" : sel.getAttachedTo().getUUID().toString()));
+				String velInfo = String.format("Vel: %s, %s", dfdouble.format(sel.getVelocity().x), dfdouble.format(sel.getVelocity().y));
 
 				font.draw(batch, ageInfo, x, index++ * h);
 				font.draw(batch, reproductionInfo, x, index++ * h);
 				font.draw(batch, ancestryInfo, x, index++ * h);
 				font.draw(batch, maturityInfo, x, index++ * h);
-//				font.draw(batch, foodInfo, x, index++ * h);
+				// font.draw(batch, foodInfo, x, index++ * h);
 				font.draw(batch, dietInfo, x, index++ * h);
-//				font.draw(batch, nearbyInfo, x, index++ * h);
+				// font.draw(batch, nearbyInfo, x, index++ * h);
 				font.draw(batch, "" + agent.getEntitiesBlockingLightFactor(), x, index++ * h);
 				font.draw(batch, miscEnergy, x, index++ * h);
 				font.draw(batch, geneInfo, x, index++ * h);
@@ -500,6 +511,7 @@ public class LibDisplay {
 				font.draw(batch, "" + c2, x, index++ * h);
 				font.draw(batch, agent.getUUID().toString(), x, index++ * h);
 				font.draw(batch, attachedInfo, x, index++ * h);
+				font.draw(batch, velInfo, x, index++ * h);
 
 				// visualize outputs
 
@@ -1278,8 +1290,8 @@ public class LibDisplay {
 		return shadowDimensions;
 	}
 
-//	public Pixmap getShadowPixmap() {
-//		return shadowPixmap;
-//	}
+	// public Pixmap getShadowPixmap() {
+	// return shadowPixmap;
+	// }
 
 }

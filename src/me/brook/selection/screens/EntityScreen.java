@@ -13,6 +13,7 @@ import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.Sprite;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer.ShapeType;
+import com.badlogic.gdx.math.Vector3;
 import com.badlogic.gdx.utils.ScreenUtils;
 
 import me.brook.selection.LibDisplay;
@@ -78,11 +79,11 @@ public class EntityScreen extends DisplayScreen {
 		batch.draw(display.berrySprite, (float) (bl.x), (float) (bl.y),
 				(float) bounds.getWidth(), (float) bounds.getHeight());
 
-//		if(display.lastShadowTexture != null) {
-//			batch.setShader(null);
-//			batch.draw(display.lastShadowTexture, (float) (bl.x), (float) (bl.y),
-//					(float) bounds.getWidth(), (float) bounds.getHeight());
-//		}
+		// if(display.lastShadowTexture != null) {
+		// batch.setShader(null);
+		// batch.draw(display.lastShadowTexture, (float) (bl.x), (float) (bl.y),
+		// (float) bounds.getWidth(), (float) bounds.getHeight());
+		// }
 
 		batch.setShader(agentShader);
 		// draw agents
@@ -191,6 +192,14 @@ public class EntityScreen extends DisplayScreen {
 	public void renderEntity(Sprite sprite, Entity entity) {
 		if(sprite == null)
 			return;
+		Vector2 location = entity.getLocation();
+
+		// check if on screen
+		Vector3 projected = worldCamera.project(new Vector3(location.x, location.y, 0));
+		if(projected.x < -(2 * Agent.getSizeOfSegment()) || projected.y < -(2 * Agent.getSizeOfSegment()) ||
+				projected.x > worldCamera.viewportWidth + (2 * Agent.getSizeOfSegment()) ||
+				projected.y > worldCamera.viewportHeight + (2 * Agent.getSizeOfSegment()))
+			return;
 
 		if(entity.isAgent()) {
 			Agent agent = (Agent) entity;
@@ -227,7 +236,6 @@ public class EntityScreen extends DisplayScreen {
 		else
 			batch.setColor(Color.WHITE);
 
-		Vector2 location = display.transformWorldToScreen(entity.getLocation());
 		//
 		float x = location.x;
 		float y = location.y;
@@ -260,7 +268,7 @@ public class EntityScreen extends DisplayScreen {
 		else {
 			w = (float) entity.getSize();
 			h = (float) entity.getSize();
-		    ox = w / 2;
+			ox = w / 2;
 			oy = h / 2;
 			x -= ox;
 			y -= oy;

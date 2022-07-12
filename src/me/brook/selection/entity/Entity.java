@@ -115,17 +115,14 @@ public abstract class Entity implements QuadSortable, Comparable<Entity> {
 			return;
 		}
 
-		// acceleration = new Vector2(0, 5000);
-		Vector2 tempVel = velocity.add(acceleration);
-
-		double smoothness = 1;
-		double windResistance = 1.0 / (1 + getSurfaceArea(tempVel.atan2(new Vector2())) * smoothness); // slow down with bigger surface area
-		// decrease acceleration according to how much it is decreased
-		windResistance = 1 / (1 + Math.pow(tempVel.distanceToSq(new Vector2()), 2)); // slow down as speed increases
-		this.velocity = velocity.add(acceleration.multiply(windResistance));
-		acceleration = acceleration.multiply(0);
+		this.velocity = velocity.add(acceleration);
+		acceleration = new Vector2();
 
 		Vector2 temp = clampToWorldBorders(this.location.add(velocity));
+		
+		double windResistance = 1.0 / (1 + getSurfaceArea(velocity.atan2(new Vector2()))); // slow down with bigger surface area
+		windResistance = 1 / (1 + Math.pow(velocity.distanceToRaw(new Vector2()), 1)); // slow down as speed increases
+		this.velocity = velocity.multiply(windResistance);
 
 		Map<Entity, List<CellCollisionInfo>> results = validate(temp, nextRelativeDirection);
 
@@ -351,7 +348,7 @@ public abstract class Entity implements QuadSortable, Comparable<Entity> {
 
 	protected void moveWithCurrent() {
 		double currentTheta = world.getCurrentThetaAt(this.location);
-		double currentForce = 10;
+		double currentForce = 1000;
 
 		if(this.isAgent())
 			this.applyForce(currentTheta, currentForce * 0);

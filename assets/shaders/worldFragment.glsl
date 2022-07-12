@@ -239,7 +239,8 @@ void main() {
 			* lightValueAt(v_texCoords.y);
 	entityShadows = max(entityShadows, 0);
 	entityShadows = min(entityShadows, 1);
-	entityShadows = 0.5 + (entityShadows * 0.5);
+	float min = 0.25;
+	entityShadows = min + (entityShadows * (1-min));
 
 	vec4 mix1 = waterColor; // water color
 	vec4 mix2 = interpolate(mix1, lightColor, sunShimmer); // add sine wave sun shimmer

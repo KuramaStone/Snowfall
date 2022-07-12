@@ -11,6 +11,6 @@ varying vec2 v_texCoords;
 uniform sampler2D u_texture;
 
 void main() {
-	gl_FragColor = vec4(vec3(1,0,0), 0.5);
+	gl_FragColor = v_color;
 }
 

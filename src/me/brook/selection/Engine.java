@@ -78,13 +78,12 @@ public class Engine extends Game {
 			this.value = value;
 		}
 	}
-
+	
 	@Override
 	public void render() {
 		if(!finishedLoading) {
 			isLoading = true;
 			loadSome();
-			return;
 		}
 		super.render();
 
@@ -125,7 +124,7 @@ public class Engine extends Game {
 	public LibDisplay getDisplay() {
 		return libDisplay;
 	}
-
+	
 	@Override
 	public void create() {
 		libDisplay.create();
@@ -162,8 +161,14 @@ public class Engine extends Game {
 			queue.add((Runnable) () -> {
 				world.getBorders().addWorldMap(world.getSeed(),
 						(int) world.getBorders().getBounds().getWidth(), (int) world.getBorders().getBounds().getHeight());
+				loadingStage = "Spawning agents";
 				if(!world.wasLoadedFromSave())
 					world.configureAllAgents();
+				loadingStage = "Building agents";
+				
+			});
+			queue.add((Runnable) () -> {
+				libDisplay.buildAgents();
 				
 				Gdx.input.setInputProcessor(new InputDetector(this));
 				setRenderingMode(RenderingMode.ENTITIES);
@@ -210,9 +215,8 @@ public class Engine extends Game {
 		config.setWindowedMode(1800, (int) Math.floor(1800 / ratio));
 		config.setWindowIcon("assets/berry.png");
 		config.setResizable(false);
-		config.setBackBufferConfig(8, 8, 8, 8, 16, 0, 8);
+		config.setBackBufferConfig(8, 8, 8, 8, 16, 0, 1);
 
-		hasDisplay = true;
 		_engine = new Engine(args);
 
 		config.setWindowListener(new Lwjgl3WindowAdapter() {
@@ -223,12 +227,7 @@ public class Engine extends Game {
 			}
 		});
 		
-		if(hasDisplay)
 			new Lwjgl3Application(_engine, config);
-		else
-			while(true) {
-				_engine.tick();
-			}
 	}
 
 	public int getFps() {
@@ -287,6 +286,11 @@ public class Engine extends Game {
 	public void setRenderingMode(RenderingMode renderingMode) {
 		this.renderingMode = renderingMode;
 		libDisplay.updateScreen(renderingMode);
+		
+//		if(renderingMode == RenderingMode.FAST)
+//			Gdx.graphics.setContinuousRendering(false);
+//		else
+//			Gdx.graphics.setContinuousRendering(true);
 	}
 
 	private World loadWorld(String path) {
@@ -314,20 +318,14 @@ public class Engine extends Game {
 
 	public void shutdown() {
 		libDisplay.dispose();
-		world.save(false);
 		running = false;
 		Gdx.app.exit();
+		world.save(false);
 		System.exit(1);
 	}
 
 	public RenderingMode getRenderingMode() {
 		return renderingMode;
-	}
-
-	private static boolean hasDisplay;
-
-	public boolean hasDisplay() {
-		return hasDisplay;
 	}
 
 	public String getSaveLocationPath() {

@@ -37,7 +37,7 @@ public class Corpse extends Entity {
 		if(size < 5)
 			size = 5;
 
-		this.applyForce(new Vector2(-Math.PI / 2).multiply(getMass()));
+		this.applyForce(new Vector2(-Math.PI / 2).multiply(getMass() * 2));
 
 		if(age > 50000) {
 			die(world, "existed too much");

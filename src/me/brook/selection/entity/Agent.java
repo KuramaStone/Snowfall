@@ -11,6 +11,9 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Random;
 
+import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.Input;
+import com.badlogic.gdx.graphics.g2d.PolygonRegion;
 import com.badlogic.gdx.graphics.g2d.Sprite;
 
 import me.brook.neat.GeneticCarrier;
@@ -207,11 +210,6 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 	public Agent() {
 	}
 
-	@Override
-	public void setLocation(Vector2 location) {
-		super.setLocation(location);
-	}
-
 	public Hitbox buildHitbox(Vector2 location, float theta) {
 		float x = location.x;
 		float y = location.y;
@@ -294,9 +292,9 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 		}
 
 		// eat food
-//		if(this.biteDelay-- < 0 && wantsToEat) {
-//			lookForFood();
-//		}
+		// if(this.biteDelay-- < 0 && wantsToEat) {
+		// lookForFood();
+		// }
 		if(wantsToPhotosynthesize && this.structure.hasType(Structure.PHOTO))
 			photosynthesis();
 		if(wantsToChemosynthesize && this.structure.hasType(Structure.CHEMO))
@@ -382,9 +380,8 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 	}
 
 	private void reproduction() {
-		if(this.maturity > 0.25 && canReproduce && wantsToReproduce && reproductionDelay < 0
-				&& this.getEnergy() >= this.getReproductionEnergyThreshold() &&
-				(lastNearbyEntities != null && lastNearbyEntities.size() < 200)) {
+		if(canReproduce && wantsToReproduce && reproductionDelay < 0
+				&& this.getEnergy() >= this.getReproductionEnergyThreshold()) {
 			Agent ally = getBreedingAlly();
 
 			reproduceWith(ally);
@@ -393,8 +390,8 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 	}
 
 	private void reproduceWith(Agent insertion) {
+
 		Vector2 loc = this.location.copy();
-		double r = size * 5;
 		int index = 0;
 
 		reproductionDelay = (int) (size); // wait x ticks before being able to breed again
@@ -429,22 +426,47 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 		child.setLocation(loc); // temp location
 		Hitbox hb = child.buildHitbox(loc, (float) child.getRelativeDirection());
 		double distance = Math.max(child.structure.getBounds().getWidth(), child.structure.getBounds().getHeight()) * Agent.getSizeOfSegment();
+		
 		// arranged in order of likelihood
-		while(loc == null || intersectsHitbox(hb) || intersectsNearbyAgent(hb) || child.intersectsWall(loc, (float) child.getRelativeDirection())
+		while(loc == null || intersectsHitbox(hb) || intersectsNearbyAgent(hb) || doesLineIntersectWall(this.location.copy(), loc, 4)
 				|| !world.getBorders().contains(loc.toPoint())) {
 			loc = this.getLocation().copy()
 					.add(new Vector2(random.nextDouble() * Math.PI * 2).multiply(distance * 4 * ((random.nextDouble() * 0.75) + 0.25)));
 			hb = child.buildHitbox(loc, (float) child.getRelativeDirection());
 
 			if(index++ > 100) {
-				return;
+				child = null;
+				break;
 			}
 		}
+
+		if(child == null) {
+			return;
+		}
+
 		child.setLocation(loc);
 		child.hitbox = child.buildHitbox();
 		child.velocity = new Vector2();
 
 		this.children++;
+	}
+
+	private boolean doesLineIntersectWall(Vector2 start, Vector2 end, int steps) {
+
+		Vector2 increment = end.subtract(start).divide(steps);
+
+		Vector2 loc = start.copy();
+		for(int i = 0; i < steps; i++) {
+			if(world.getBorders().intersects(loc))
+				return true;
+			
+			loc = loc.add(increment);
+		}
+		
+		if(world.getBorders().intersects(loc))
+			return true;
+
+		return false;
 	}
 
 	private boolean intersectsHitbox(Hitbox hb) {
@@ -816,7 +838,7 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 		// if(Gdx.input.isKeyPressed(Input.Keys.H))
 		// desiredPower = 1;
 		// else
-		// this.velocity = new Vector2();
+		// desiredPower = 0;
 
 		totalOutputtedPower += desiredPower;
 
@@ -831,7 +853,7 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 
 		wantsToReproduce = out[2] > 0.0;
 
-		double speed = (this.speedGene * Math.pow(structure.getStructure().size(), 2)) * currentMetabolism * 1;
+		double speed = (this.speedGene * Math.pow(getMass(), 2) * currentMetabolism * 3);
 
 		double force = desiredPower * (speed);
 		applyForce(this.relative_direction, force);
@@ -880,7 +902,7 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 	public double getMass(boolean useMaturity) {
 		double maturityModifier = useMaturity ? Math.min(Math.max(maturity, 0.05), 1) : 1;
 		double mass = (getSizeOfSegment()) * Math.pow(segmentCount, 2) * density * maturityModifier;
-		
+
 		if(!Double.isFinite(mass))
 			getAge();
 		return mass;
@@ -896,7 +918,7 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 
 		double sizeUsage = structure.getStructure().size() * 1 * currentMetabolism;
 		double brainUsage = Math.pow(brain.getConnections().size() + brain.getTotalNeurons().size(), 2) * 0;
-		double movementUsage = (lastForceOutput * getMass()) * 0.0000003 * 0;
+		double movementUsage = lastForceOutput / Math.pow(getMass(), 2);
 		double used = (sizeUsage + brainUsage + movementUsage) * energyModifier;
 		// if(this.isSelected())
 		// System.out.println(sizeUsage / energy);
@@ -1315,6 +1337,7 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 	public void setRelativeDirection(double relative_direction) {
 		this.relative_direction = relative_direction;
 		this.nextRelativeDirection = (float) relative_direction;
+		this.lastRotation = this.relative_direction;
 	}
 
 	protected float getSurfaceAreaForSegment(Segment seg, Vector2 sourceNormal) {
@@ -1341,7 +1364,7 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 		return totalLightReceived;
 	}
 
-	public String mutateBodyDNA(String dna, double nodeChance, double dirAddChance, double dirDeleteChance,
+	public String mutateBodyDNA(String dna, double nodeTypeChance, double dirAddChance, double dirDeleteChance,
 			double copyChance, double deleteChance, double angleChance) {
 
 		StringBuilder sb = new StringBuilder("A.");
@@ -1390,7 +1413,7 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 			}
 
 			// mutate node type
-			if(random.nextDouble() < nodeChance) {
+			if(random.nextDouble() < nodeTypeChance) {
 				int i = 1 + random.nextInt(4);
 				type = switch(i) {
 					// case 0: {
@@ -1674,7 +1697,34 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 		return 1.5;
 	}
 
+	@Override
+	public void setLocation(Vector2 location) {
+		super.setLocation(location);
+		this.lastLocation = location.copy();
+	}
+
 	public void setLastNearbyEntities(List<NearbyEntry> lastNearbyEntities) {
 		this.lastNearbyEntities = lastNearbyEntities;
+	}
+
+	protected PolygonRegion computedShadowRegion;
+	protected Vector2 lastLocation;
+	protected double lastRotation;
+
+	public void setComputedShadowRegion(PolygonRegion region) {
+		this.computedShadowRegion = region;
+	}
+
+	public PolygonRegion getComputedShadowRegion() {
+		return computedShadowRegion;
+	}
+
+	public boolean shouldComputeNewShadowRegion() {
+		if(lastLocation == null)
+			return true;
+		if(computedShadowRegion == null)
+			return true;
+
+		return !this.location.equals(lastLocation) || this.relative_direction != this.lastRotation;
 	}
 }
