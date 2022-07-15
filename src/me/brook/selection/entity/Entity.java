@@ -61,7 +61,7 @@ public abstract class Entity implements QuadSortable, Comparable<Entity> {
 	private Vector2 relativeAttachment;
 	protected float[] sensorHormones;
 	private boolean disposed = false;
-	
+
 	public Entity(World world, double energy, Vector2 location, Color color, double size) {
 		this.world = world;
 		this.energy = energy;
@@ -118,34 +118,37 @@ public abstract class Entity implements QuadSortable, Comparable<Entity> {
 		acceleration = new Vector2();
 
 		Vector2 temp = clampToWorldBorders(this.location.add(velocity));
-		
+
 		double windResistance = 1.0 / (1 + getSurfaceArea(velocity.atan2(new Vector2()))); // slow down with bigger surface area
 		windResistance = 1 / (1 + Math.pow(velocity.distanceToRaw(new Vector2()), 1)); // slow down as speed increases
 		this.velocity = velocity.multiply(windResistance);
 
 		Map<Entity, List<CellCollisionInfo>> results = broadphaseCollision(temp, nextRelativeDirection);
 
-		if(resolveCollisions(results)) {
+		resolveCollisions(results);
 
-			if(!intersectsWall(temp, nextRelativeDirection)) {
-				setLocation(temp);
+		if(!intersectsWall(temp, nextRelativeDirection)) {
+			setLocation(temp);
 
-				this.relative_direction = this.nextRelativeDirection;
-			}
+			this.relative_direction = this.nextRelativeDirection;
+		}
+		else {
+			// calculate normal for wall
+			this.velocity = new Vector2();
+		}
 
-			try {
-				for(int i = 0; i < attachedEntities.size(); i++) {
-					Entity ent = attachedEntities.get(i);
+		try {
+			for(int i = 0; i < attachedEntities.size(); i++) {
+				Entity ent = attachedEntities.get(i);
 
-					if(ent != null) {
-						ent.moveWithAttachedParent();
-					}
+				if(ent != null) {
+					ent.moveWithAttachedParent();
 				}
 			}
-			catch(Exception e) {
-			}
 		}
-		
+		catch(Exception e) {
+		}
+
 		if(!velocity.isFinite())
 			die(world, "shame");
 
@@ -162,10 +165,10 @@ public abstract class Entity implements QuadSortable, Comparable<Entity> {
 	public double getTotalMass() {
 		double myMass = getMass();
 		double attachedMass = attachedMass();
-		
+
 		if(!Double.isFinite(myMass + attachedMass))
 			getAge();
-		
+
 		return myMass + attachedMass;
 	}
 
@@ -235,7 +238,7 @@ public abstract class Entity implements QuadSortable, Comparable<Entity> {
 	protected void applyImpulse(Vector2 force) {
 		if(!force.isFinite())
 			return;
-		
+
 		Vector2 loc = clampToWorldBorders(this.location.add(force.divide(getTotalMass())));
 		if(!world.getBorders().intersects(loc))
 			setLocation(loc);
@@ -446,6 +449,7 @@ public abstract class Entity implements QuadSortable, Comparable<Entity> {
 			int children = (int) state.map.get("children");
 			double bodyEnergy = (double) state.map.get("bodyEnergy");
 			String bodyGene = (String) state.map.get("bodyGene");
+			double health = (double) state.map.get("health");
 
 			AgentLife life = new AgentLife(world, null, null, 0, 0, new Vector2(), false);
 			life.setRelativeDirection(rotation);
@@ -454,6 +458,7 @@ public abstract class Entity implements QuadSortable, Comparable<Entity> {
 			life.children = children;
 			life.setBodyMaintainanceEnergy(bodyEnergy);
 			life.setBodyGene(bodyGene);
+			life.setHealth(health);
 
 			entity = life;
 		}

@@ -93,6 +93,7 @@ public class LibDisplay {
 	public RenderingMode prevMode;
 	private byte[] shadowByteArray;
 	private Vector2 shadowDimensions;
+	private TextureRegion shadowBackgroundTexture;
 
 	public LibDisplay(Engine engine) {
 		this.engine = engine;
@@ -121,7 +122,15 @@ public class LibDisplay {
 		infoScreen = new InfoScreen(this);
 		loadingScreen = new LoadingScreen(this);
 		fastScreen = new FastScreen(this);
-
+		
+		
+		Pixmap pix = new Pixmap(1, 1, Pixmap.Format.Alpha);
+		pix.setColor(new Color(0, 0, 1, 1f));
+		pix.fill();
+		Texture texture = new TextureTracker(pix);
+		shadowBackgroundTexture = new TextureRegion(texture);
+		pix.dispose();
+		
 		updateScreen(engine.getRenderingMode());
 	}
 
@@ -209,16 +218,21 @@ public class LibDisplay {
 
 	public void buildAgents() {
 
-		List<Agent> toBuild = engine.getWorld().getToBuild();
+		try {
+			List<Agent> toBuild = engine.getWorld().getToBuild();
 
-		int max = Math.min(toBuild.size(), 10000);
-		for(int i = 0; i < max; i++) {
-			Agent a = toBuild.remove(0);
-			
-			if(a == null || !a.isAlive()) {
-				continue;
+			for(int i = 0; i < toBuild.size(); i++) {
+				Agent a = toBuild.remove(i);
+
+				if(a == null || !a.isAlive()) {
+					continue;
+				}
+				buildBodyFor(a);
+				i--;
 			}
-			buildBodyFor(a);
+		}
+		catch(Exception e) {
+			e.printStackTrace();
 		}
 
 	}
@@ -239,7 +253,17 @@ public class LibDisplay {
 		return new Vector2(unproject.x, unproject.y);
 	}
 
-	public void renderShadows(final int width, final int height) {
+	public int calcShadowWidth() {
+		return (int) (engine.getWorld().getWorldWidth() / 16);
+	}
+
+	public int calcShadowHeight() {
+		return (int) (engine.getWorld().getWorldHeight() / 32);
+	}
+
+	public void renderShadows() {
+		int width = calcShadowWidth();
+		int height = calcShadowHeight();
 		Rectangle2D bounds = engine.getWorld().getBorders().getBounds2D();
 
 		shadowBuffer = new FrameBuffer(Pixmap.Format.Alpha, width, height,
@@ -297,12 +321,6 @@ public class LibDisplay {
 
 		PolygonRegion polyRegion;
 
-		Pixmap pix = new Pixmap(1, 1, Pixmap.Format.Alpha);
-		pix.setColor(new Color(0, 0, 1, 1f));
-		pix.fill();
-
-		Texture texture = new TextureTracker(pix);
-		TextureRegion texRegion = new TextureRegion(texture);
 		polybatch.setColor(0, 0, 0, 0.5f);
 
 		for(int i = 0; i < toRender.size(); i++) {
@@ -321,44 +339,11 @@ public class LibDisplay {
 
 					// generate quad stretching from agent corners to back wall and render that shape
 
-					PolygonRegion region;
-					if(agent.shouldComputeNewShadowRegion()) {
-						Vector2[] corners = box.getRotatedCorners(box.getOrigin(), box.getCurrentTheta());
+					polyRegion = agent.getComputedShadowRegion();
+					if(polyRegion == null)
+						continue;
 
-						Vector2 leftCorner = null;
-						Vector2 rightCorner = null;
-						Vector2 topCorner = null;
-						Vector2 bottomCorner = null;
-						for(Vector2 v2 : corners) {
-
-							if(leftCorner == null || v2.x < leftCorner.x)
-								leftCorner = v2;
-							if(rightCorner == null || v2.x > rightCorner.x)
-								rightCorner = v2;
-							if(topCorner == null || v2.y > topCorner.y)
-								topCorner = v2;
-							if(bottomCorner == null || v2.y < bottomCorner.y)
-								bottomCorner = v2;
-						}
-						leftCorner = toQuadVector(leftCorner, width, height, bounds);
-						rightCorner = toQuadVector(rightCorner, width, height, bounds);
-						topCorner = toQuadVector(topCorner, width, height, bounds);
-						bottomCorner = toQuadVector(bottomCorner, width, height, bounds);
-
-						FloatArray vertices = new FloatArray(new float[] {
-								leftCorner.x, leftCorner.y, bottomCorner.x, bottomCorner.y, rightCorner.x, rightCorner.y,
-								rightCorner.x, (float) bounds.getMinY(), leftCorner.x, (float) bounds.getMinY() });
-						// FloatArray vertices = new FloatArray(new float[] {
-						// 0, 0, 0, resolution, resolution, 0 });
-						ShortArray tris = triangulator.computeTriangles(vertices);
-						region = new PolygonRegion(texRegion, vertices.toArray(), tris.toArray());
-						agent.setComputedShadowRegion(region);
-					}
-					else {
-						region = agent.getComputedShadowRegion();
-					}
-
-					polybatch.draw(region, 0, 0);
+					polybatch.draw(polyRegion, 0, 0);
 
 					// shapes.rect(low.x, 0, high.x - low.x, low.y);
 				}
@@ -366,8 +351,6 @@ public class LibDisplay {
 		}
 
 		polybatch.end();
-		pix.dispose();
-		texture.dispose();
 		Gdx.gl.glBlendEquation(GL20.GL_FUNC_ADD);
 	}
 
@@ -822,6 +805,10 @@ public class LibDisplay {
 		font.dispose();
 
 		return pixmap;
+	}
+	
+	public TextureRegion getShadowBackgroundTexture() {
+		return shadowBackgroundTexture;
 	}
 
 	public static Pixmap getImage(NeatNetwork network, int width, int height, boolean drawWeights) {

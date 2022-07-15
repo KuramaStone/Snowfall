@@ -8,14 +8,11 @@ import org.nustaq.serialization.FSTConfiguration;
 public class Test {
 
 	public static void main(String[] args) {
+		System.out.println(Integer.toBinaryString(getState(true, true, true, false)));
+	}
 
-		FSTConfiguration conf = FSTConfiguration.createJsonConfiguration(true, false);
-		
-		Map<String, Object> map = new HashMap<>();
-		map.put("data", "null");
-		map = (Map<String, Object>) conf.asObject(conf.asByteArray(map));
-		
-		System.out.println(map.get("data") == null);
+	public static int getState(boolean a, boolean b, boolean c, boolean d) {
+		return ((a ? 1 : 0) * 8) + ((b ? 1 : 0) * 4) + ((c ? 1 : 0) * 2) + (d ? 1 : 0);
 	}
 
 }

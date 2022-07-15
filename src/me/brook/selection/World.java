@@ -362,9 +362,10 @@ public class World {
 		// System.out.println(skillFactor);
 	}
 
-	public void update() throws InterruptedException {
+	public boolean update() throws InterruptedException {
 		if(updateResults != null && !areResultsReady())
-			return;
+			return false;
+
 		lastLivingPopulation = calculateLivingPopulation();
 
 		// make sure to save after threads are guaranteed to be finished
@@ -388,9 +389,23 @@ public class World {
 		checkAdditionsRemovals();
 		adjustSkillFactor();
 
-		if(this.toBuild.size() > lastLivingPopulation * 1.1)
-			System.err.println("toBuild array too full.");
-		
+		if(engine.getRenderingMode() != RenderingMode.ENTITIES) {
+			if(this.toBuild.size() > lastLivingPopulation * 1.1) {
+				System.err.println("toBuild array too full.");
+				for(int i = 0; i < toBuild.size(); i++) {
+					Agent a = toBuild.get(i);
+
+					if(a.isAlive() && a.shouldExist()) {
+						// do nothing
+					}
+					else {
+						toBuild.remove(a);
+						i--;
+					}
+				}
+			}
+		}
+
 		if(realTime) {
 			if((this.ticksSinceRestart) % 500 == 0) {
 
@@ -446,20 +461,9 @@ public class World {
 			respawnAgent(false);
 		}
 
-		Profiler.startRecord("invoke");
 		calculateAgents();
-		Profiler.stopRecord("invoke");
-		// for(Entity e : new HashSet<>(this.entities)) {
-		// e.tick(this);
-		// }
 
-		// if(this.ticksSinceRestart % 100 == 0) {
-		// for(int i = 0; i < this.entities.size(); i++) {
-		// if(!this.borders.contains(this.entities.get(i).getLocation().x, this.entities.get(i).getLocation().y)) {
-		// this.entities.get(i).die(this, "out of bounds");
-		// }
-		// }
-		// }
+		return true;
 
 	}
 
@@ -1077,8 +1081,10 @@ public class World {
 		this.selectedEntity = selectedEntity;
 
 		if(selectedEntity != null && selectedEntity.isAgent())
-			setBestBrainImage((Agent) selectedEntity, engine.getDisplay().getImageWidth(),
-					engine.getDisplay().getImageHeight());
+			Gdx.app.postRunnable((Runnable) () -> {
+				setBestBrainImage((Agent) selectedEntity, engine.getDisplay().getImageWidth(),
+						engine.getDisplay().getImageHeight());
+			});
 	}
 
 	public Entity getSelectedEntity() {
@@ -1148,7 +1154,7 @@ public class World {
 		double yValue = Math.abs(location.y - bounds.getMaxY()) / (bounds.getHeight());
 		yValue = Math.max(0, Math.min(1, 1 - yValue));
 
-		double lightLevels = Math.pow(yValue, 2);
+		double lightLevels = Math.pow(yValue, 1);
 		lightLevels = Math.max(0, Math.min(1, lightLevels));
 
 		return lightLevels * getDaytimeLightFactor();
@@ -1175,8 +1181,11 @@ public class World {
 		if(entity == null)
 			return;
 
-		if(entity.isAgent() && !speciesManager.contains((Agent) entity))
-			speciesManager.distributeOrMakeNewSpecies(Arrays.asList((Agent) entity));
+		if(entity.isAgent() && !speciesManager.contains((Agent) entity)) {
+			ArrayList<Agent> list = new ArrayList<>(1);
+			list.add((Agent) entity);
+			speciesManager.distributeOrMakeNewSpecies(list);
+		}
 
 		entities.add(entity);
 
@@ -1244,7 +1253,7 @@ public class World {
 		return angleOfSun;
 	}
 
-	private int dayLength = 10000;
+	private int dayLength = 15000;
 
 	public void updateSun() {
 		double thetaPerTick = (Math.PI * 2) / dayLength;

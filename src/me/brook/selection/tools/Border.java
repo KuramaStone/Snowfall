@@ -11,6 +11,7 @@ import java.awt.geom.AffineTransform;
 import java.awt.geom.Area;
 import java.awt.geom.GeneralPath;
 import java.awt.geom.Line2D;
+import java.awt.geom.Line2D.Double;
 import java.awt.geom.PathIterator;
 import java.awt.geom.Point2D;
 import java.awt.geom.Rectangle2D;
@@ -33,6 +34,7 @@ import com.badlogic.gdx.graphics.Pixmap;
 import com.badlogic.gdx.graphics.Pixmap.Blending;
 import com.badlogic.gdx.graphics.PixmapIO;
 import com.badlogic.gdx.graphics.Texture;
+import com.badlogic.gdx.graphics.g2d.PolygonRegion;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.glutils.FrameBuffer;
 import com.badlogic.gdx.graphics.glutils.ShaderProgram;
@@ -53,6 +55,8 @@ public class Border extends Area implements Serializable, Bounds {
 
 	private Texture worldTexture;
 	private Pixmap worldPixmap;
+	private List<LineLocation> terrainLines;
+	private SpatialHashing<LineLocation> lineHashing;
 
 	private World world;
 
@@ -65,6 +69,129 @@ public class Border extends Area implements Serializable, Bounds {
 	public void build() {
 		bounds2D = path.getBounds2D();
 		bounds = path.getBounds();
+	}
+
+	public void generatePolygonsFromMap() {
+		// marching square algorithm
+		// use alpha values to generate map. alpha of 0 is passable, alpha of 1 is not
+
+		List<Line2D.Double> lines = new ArrayList<>();
+
+		// divide map into 2x2 pixel regions
+		for(int x = 0; x < worldPixmap.getWidth() - 1; x++) {
+			for(int y = 0; y < worldPixmap.getHeight() - 1; y++) {
+				double v1 = worldPixmap.getPixel(x, y) & ((1 << 8) - 1); // top left
+				double v2 = worldPixmap.getPixel(x + 1, y) & ((1 << 8) - 1); // top right
+				double v3 = worldPixmap.getPixel(x + 1, y + 1) & ((1 << 8) - 1); // bottom right
+				double v4 = worldPixmap.getPixel(x, y + 1) & ((1 << 8) - 1); // bottom left
+
+				Vector2 a = new Vector2(x + 0.5, y);
+				Vector2 b = new Vector2(x + 1, y + 0.5);
+				Vector2 c = new Vector2(x + 0.5, y + 1);
+				Vector2 d = new Vector2(x, y + 0.5);
+
+				int state = getState(v1 == 255, v2 == 255, v3 == 255, v4 == 255);
+
+				switch(state) {
+					case 0 : {
+						break;
+					}
+					case 1 : {
+						lines.add(lineFrom(c, d));
+						break;
+					}
+					case 2 : {
+						lines.add(lineFrom(b, c));
+						break;
+					}
+					case 3 : {
+						lines.add(lineFrom(b, d));
+						break;
+					}
+
+					case 4 : {
+						lines.add(lineFrom(a, b));
+						break;
+					}
+					case 5 : {
+						lines.add(lineFrom(a, d));
+						lines.add(lineFrom(b, c));
+						break;
+					}
+					case 6 : {
+						lines.add(lineFrom(a, c));
+						break;
+					}
+					case 7 : {
+						lines.add(lineFrom(a, d));
+						break;
+					}
+
+					case 8 : {
+						lines.add(lineFrom(a, d));
+						break;
+					}
+					case 9 : {
+						lines.add(lineFrom(a, c));
+						break;
+					}
+					case 10 : {
+						lines.add(lineFrom(a, b));
+						lines.add(lineFrom(c, d));
+						break;
+					}
+					case 11 : {
+						lines.add(lineFrom(a, b));
+						break;
+					}
+
+					case 12 : {
+						lines.add(lineFrom(b, d));
+						break;
+					}
+					case 13 : {
+						lines.add(lineFrom(b, c));
+						break;
+					}
+					case 14 : {
+						lines.add(lineFrom(c, d));
+						break;
+					}
+					case 15 : {
+						break;
+					}
+
+					default:
+						throw new IllegalArgumentException("Unexpected value: " + state);
+				}
+				;
+
+			}
+		}
+
+		lineHashing = new SpatialHashing<>(LineLocation.class, worldPixmap.getWidth(), (worldPixmap.getWidth() / 50));
+
+		this.terrainLines = new ArrayList<>(lines.size());
+		// flip all lines
+		for(Line2D.Double line : lines) {
+			line.y1 = (worldPixmap.getHeight() - 1) - line.y1;
+			line.y2 = (worldPixmap.getHeight() - 1) - line.y2;
+
+			LineLocation ll = new LineLocation(line);
+			lineHashing.store(ll, ll.getLocation(), 2);
+			
+			this.terrainLines.add(ll);
+		}
+
+
+	}
+
+	private Line2D.Double lineFrom(Vector2 a, Vector2 b) {
+		return new Line2D.Double(a.x, a.y, b.x, b.y);
+	}
+
+	private int getState(boolean a, boolean b, boolean c, boolean d) {
+		return ((a ? 1 : 0) * 8) + ((b ? 1 : 0) * 4) + ((c ? 1 : 0) * 2) + (d ? 1 : 0);
 	}
 
 	public void addWorldMap(int seed, int width, int height) {
@@ -111,7 +238,6 @@ public class Border extends Area implements Serializable, Bounds {
 		ByteBuffer buf = worldPixmap.getPixels();
 		Gdx.gl.glReadPixels(0, 0, width, height, GL20.GL_RGBA, GL20.GL_UNSIGNED_BYTE, buf);
 
-
 		Pixmap wormPixmap = new Pixmap(width, height, Pixmap.Format.RGBA8888);
 		// draw worms on pixmap
 		int worms = 3;
@@ -144,28 +270,28 @@ public class Border extends Area implements Serializable, Bounds {
 			}
 		}
 
-		//		PixmapIO.writePNG(Gdx.files.absolute("E:\\Programming\\Natural Selection\\map.png"), worldPixmap);
+		// PixmapIO.writePNG(Gdx.files.absolute("E:\\Programming\\Natural Selection\\map.png"), worldPixmap);
 
 		Texture wormTexture = new Texture(wormPixmap);
 		Texture terrainTexture = new Texture(worldPixmap);
-		
+
 		batch.begin();
 		batch.setShader(wormShader);
 		wormTexture.bind(1);
 		wormShader.setUniformi("wormTexture", 1);
 		Gdx.gl.glActiveTexture(GL20.GL_TEXTURE0);
-		
+
 		batch.setColor(new Color(0.85f, 0.65f, 0.42f, 1f)); // cave color
 		batch.draw(terrainTexture, 0, 0);
-		
+
 		batch.end();
-		
+
 		wormTexture.dispose();
 		terrainTexture.dispose();
 
 		buf = worldPixmap.getPixels();
 		Gdx.gl.glReadPixels(0, 0, width, height, GL20.GL_RGBA, GL20.GL_UNSIGNED_BYTE, buf);
-		
+
 		worldTexture = new Texture(worldPixmap);
 
 		framebuffer.end();
@@ -438,6 +564,25 @@ public class Border extends Area implements Serializable, Bounds {
 		return worldTexture;
 	}
 
+	public List<LineLocation> getTerrainLines() {
+		return terrainLines;
+	}
+
+	public LineLocation getIntersectingLine(Line2D.Double line) {
+		LineLocation[] near = lineHashing.query(line.getBounds2D());
+
+		if(near == null || near.length == 0)
+			return null;
+
+		for(LineLocation ll : near) {
+			if(ll.line.intersectsLine(line)) {
+				return ll;
+			}
+		}
+
+		return null;
+	}
+
 	public boolean intersects(Vector2 point) {
 		point = point.copy();
 		point.x -= bounds.getMinX();
@@ -452,4 +597,31 @@ public class Border extends Area implements Serializable, Bounds {
 		return alpha == 0;
 	}
 
+	public static class LineLocation implements QuadSortable {
+
+		private Vector2 location;
+		private Line2D.Double line;
+		private Vector2 normal;
+
+		public LineLocation(Double line) {
+			this.location = new Vector2((line.x1 + line.x2) / 2, (line.y1 + line.y2) / 2);
+			this.line = line;
+
+			this.normal = new Vector2(-(line.y2 - line.y1), (line.x2 - line.x1));
+		}
+
+		public Vector2 getNormal() {
+			return normal;
+		}
+
+		public Line2D.Double getLine() {
+			return line;
+		}
+
+		@Override
+		public Vector2 getLocation() {
+			return location;
+		}
+
+	}
 }

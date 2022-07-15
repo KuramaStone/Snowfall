@@ -1,6 +1,7 @@
 package me.brook.selection.entity;
 
 import java.awt.Color;
+import java.awt.geom.Rectangle2D;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -15,6 +16,9 @@ import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
 import com.badlogic.gdx.graphics.g2d.PolygonRegion;
 import com.badlogic.gdx.graphics.g2d.Sprite;
+import com.badlogic.gdx.math.EarClippingTriangulator;
+import com.badlogic.gdx.utils.FloatArray;
+import com.badlogic.gdx.utils.ShortArray;
 
 import me.brook.neat.GeneticCarrier;
 import me.brook.neat.network.NeatNetwork;
@@ -122,8 +126,6 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 	protected double[] lastOutputs;
 
 	protected double currentMetabolism, baseMetabolism;
-
-	protected double totalOutputtedPower, totalRotation;
 
 	protected double[] noveltyMetrics;
 
@@ -342,8 +344,8 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 				//
 				for(EntityBite e : stomach) {
 					// how much it resists digestion
-					double difficulty = e.getSource().getDigestionDifficulty();
-					double energyDissolved = e.getEnergy() * difficulty * currentMetabolism * wantsToDigest;
+					double difficulty = 1;
+					double energyDissolved = e.getEnergy() * difficulty * wantsToDigest;
 					energyConsumed += energyDissolved * getDietModifier(e.source.isBerry());
 
 					double energyGained = energyDissolved * getDietModifier(false);
@@ -427,7 +429,7 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 		child.setLocation(loc); // temp location
 		Hitbox hb = child.buildHitbox(loc, (float) child.getRelativeDirection());
 		double distance = Math.max(child.structure.getBounds().getWidth(), child.structure.getBounds().getHeight()) * Agent.getSizeOfSegment();
-		
+
 		// arranged in order of likelihood
 		while(loc == null || intersectsHitbox(hb) || intersectsNearbyAgent(hb) || doesLineIntersectWall(this.location.copy(), loc, 4)
 				|| !world.getBorders().contains(loc.toPoint())) {
@@ -460,10 +462,10 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 		for(int i = 0; i < steps; i++) {
 			if(world.getBorders().intersects(loc))
 				return true;
-			
+
 			loc = loc.add(increment);
 		}
-		
+
 		if(world.getBorders().intersects(loc))
 			return true;
 
@@ -832,42 +834,45 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 
 		double rotation = out[0];
 
-		double desiredPower = 0;
-		if(desiredPower < 0)
-			desiredPower = 0;
+		double desiredForceX = out[1];
+		double desiredForceY = out[2];
+		if(Math.abs(desiredForceX) < 0.01)
+			desiredForceX = 0;
+		if(Math.abs(desiredForceY) < 0.01)
+			desiredForceY = 0;
 
-		// if(Gdx.input.isKeyPressed(Input.Keys.H))
-		// desiredPower = 1;
-		// else
-		// desiredPower = 0;
-
-		totalOutputtedPower += desiredPower;
+		if(isSelected())
+			if(Gdx.input.isKeyPressed(Input.Keys.J))
+				if(Gdx.input.isKeyPressed(Input.Keys.H))
+					desiredForceX = 1;
+				else
+					desiredForceX = -1;
 
 		double changeAngleBy = (rotation) * Math.toRadians(4);
 
-		this.totalRotation += Math.abs(changeAngleBy);
-
-		this.nextRelativeDirection = (float)
-
-		getTrueTheta(this.relative_direction + changeAngleBy);
+		this.nextRelativeDirection = (float) getTrueTheta(this.relative_direction + changeAngleBy);
 		// this.relative_direction = -Math.PI / 2;
 
-		wantsToReproduce = out[2] > 0.0;
+		wantsToReproduce = out[3] > 0.0;
 
-		double speed = (this.speedGene * Math.pow(getMass(), 2) * currentMetabolism * 3);
+		double speed = (this.speedGene * Math.pow(getMass(), 1)) * 1;
 
-		double force = desiredPower * (speed);
-		applyForce(this.relative_direction, force);
-		lastForceOutput = force;
+		// rotate force relative to current direction
+		Vector2 force = new Vector2(desiredForceX, desiredForceY).multiply(speed);
+		force = force.rotate(new Vector2(), this.nextRelativeDirection);
+		// if(isSelected())
+		// System.out.printf("%s, %s, %s, %s\n", this.speedGene, Math.pow(getMass(), 1), currentMetabolism, force.toString());
+		this.applyForce(force);
+		lastForceOutput = Math.abs(desiredForceX) + Math.abs(desiredForceY);
 
 		// only one energy access method can be used at a time
-		wantsToPhotosynthesize = out[3] >= 0;
-		wantsToChemosynthesize = out[4] >= 0;
+		wantsToPhotosynthesize = out[4] >= 0;
+		wantsToChemosynthesize = out[5] >= 0;
 		// wantsToEjectFood = out[6];
-		wantsToHeal = out[5];
-		wantsToAttack = out[6] >= 0;
-		wantsToHold = out[7] > 0;
-		wantsToDigest = Math.max(out[8], 0);
+		wantsToHeal = out[6];
+		wantsToAttack = out[7] >= 0;
+		wantsToHold = out[8] > 0;
+		wantsToDigest = Math.max(out[9], 0);
 
 	}
 
@@ -917,12 +922,17 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 		if(age < 10)
 			return;
 
-		double sizeUsage = structure.getStructure().size() * 1 * currentMetabolism;
+		double sizeUsage = structure.getStructure().size() * 0.1;
 		double brainUsage = Math.pow(brain.getConnections().size() + brain.getTotalNeurons().size(), 2) * 0;
-		double movementUsage = lastForceOutput / Math.pow(getMass(), 2);
+		double movementUsage = Math.abs(lastForceOutput) / Math.pow(getMass(), 2);
 		double used = (sizeUsage + brainUsage + movementUsage) * energyModifier;
 		// if(this.isSelected())
 		// System.out.println(sizeUsage / energy);
+
+		if(used < 0) {
+			used = 0;
+			System.err.printf("Used negative energy. Size: %s, Brain: %s, Movement: %s\n", sizeUsage, brainUsage, movementUsage);
+		}
 
 		bodyMaintainanceEnergy += used;
 
@@ -1008,7 +1018,7 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 	}
 
 	public double getReproductionEnergyThreshold() {
-		return structure.getStructure().size() * 250 * getEnergyPerHP();
+		return structure.getStructure().size() * 50 * getEnergyPerHP();
 	}
 
 	public void setFitness(double fitness) {
@@ -1070,12 +1080,8 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 		this.relative_direction = random.nextDouble() * Math.PI * 2;
 
 		max_age = Integer.MAX_VALUE;
-		maxHealth = getMass(false) * 10;
+		maxHealth = this.getGeneDNA().split("\\.").length * 1000; // structure isn't built yet
 		health = maxHealth * 0.25; // start with low hp
-	}
-
-	public void initHealth() {
-		maxHealth = this.structure.getStructure().size() * 250;
 	}
 
 	public double getHealth() {
@@ -1463,6 +1469,7 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 		state.map.put("children", this.children);
 		state.map.put("bodyEnergy", this.getBodyMaintainanceEnergy());
 		state.map.put("bodyGene", this.bodyDNA);
+		state.map.put("health", this.health);
 
 		return state;
 	}
@@ -1476,7 +1483,7 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 	}
 
 	protected double getEnergyPerHP() {
-		return getSizeOfSegment() * 0.33;
+		return 50;
 	}
 
 	public double damage(Entity attacker, double damage) {
@@ -1507,7 +1514,6 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 		for(Segment seg : structure.getStructure())
 			seg.setStrength(1);
 		sight_range = (float) (4 * getSizeOfSegment() * Math.max(structure.getBounds().getWidth(), structure.getBounds().getHeight()));
-		initHealth();
 	}
 
 	public void setBodySprite(Sprite bodySprite) {
@@ -1643,7 +1649,7 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 						if(dist <= getSizeOfSegment() * 1.2) {
 							collides = true;
 						}
-						if(dist <= getSizeOfSegment() * 0.8) { // only separate when they intersect too far
+						if(dist <= getSizeOfSegment() * 0.9) { // only separate when they intersect too far
 							collides = true;
 							double lerp = (rudeMass / (myMass + rudeMass));
 							double moveBy = getSizeOfSegment() - dist;
@@ -1714,6 +1720,53 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 
 	public void setComputedShadowRegion(PolygonRegion region) {
 		this.computedShadowRegion = region;
+	}
+	
+	
+	public void createShadowRegion(int mapWidth, int mapHeight) {
+		EarClippingTriangulator triangulator = new EarClippingTriangulator();
+		
+		Rectangle2D bounds = world.getBorders().getBounds2D();
+		Vector2[] corners = hitbox.getRotatedCorners(hitbox.getOrigin(), hitbox.getCurrentTheta());
+
+		Vector2 leftCorner = null;
+		Vector2 rightCorner = null;
+		Vector2 topCorner = null;
+		Vector2 bottomCorner = null;
+		for(Vector2 v2 : corners) {
+
+			if(leftCorner == null || v2.x < leftCorner.x)
+				leftCorner = v2;
+			if(rightCorner == null || v2.x > rightCorner.x)
+				rightCorner = v2;
+			if(topCorner == null || v2.y > topCorner.y)
+				topCorner = v2;
+			if(bottomCorner == null || v2.y < bottomCorner.y)
+				bottomCorner = v2;
+		}
+		leftCorner = toQuadVector(leftCorner, mapWidth, mapHeight, bounds);
+		rightCorner = toQuadVector(rightCorner, mapWidth, mapHeight, bounds);
+		topCorner = toQuadVector(topCorner, mapWidth, mapHeight, bounds);
+		bottomCorner = toQuadVector(bottomCorner, mapWidth, mapHeight, bounds);
+
+		FloatArray vertices = new FloatArray(new float[] {
+				leftCorner.x, leftCorner.y, bottomCorner.x, bottomCorner.y, rightCorner.x, rightCorner.y,
+				rightCorner.x, (float) bounds.getMinY(), leftCorner.x, (float) bounds.getMinY() });
+		// FloatArray vertices = new FloatArray(new float[] {
+		// 0, 0, 0, resolution, resolution, 0 });
+		ShortArray tris = triangulator.computeTriangles(vertices);
+		PolygonRegion region = new PolygonRegion(world.getEngine().getDisplay().getShadowBackgroundTexture(), vertices.toArray(), tris.toArray());
+		
+		this.setComputedShadowRegion(region);
+	}
+
+	private Vector2 toQuadVector(Vector2 vector2, int width, int height, Rectangle2D worldbounds) {
+		float x = (float) (((vector2.x - worldbounds.getMinX()) / worldbounds.getWidth()) * width);
+		float y = (float) (((vector2.y - worldbounds.getMinY()) / worldbounds.getHeight()) * height);
+		x = Math.max(0, Math.min(x, width));
+		y = Math.max(0, Math.min(y, height));
+
+		return new Vector2(x, y);
 	}
 
 	public PolygonRegion getComputedShadowRegion() {

@@ -7,13 +7,17 @@ import me.brook.selection.World;
 import me.brook.selection.tools.Vector2;
 
 public class Corpse extends Entity {
-	
+
 	private double mass;
+	private double startMass;
+	private double startEnergy;
 
 	public Corpse(World world, double mass, double energy, Vector2 location) {
 		super(world, energy, location, new Color(196, 92, 90), 1);
 		setIconID("assets/berry.png");
 		this.mass = mass;
+		this.startEnergy = energy;
+		this.startMass = mass;
 
 		size = Math.sqrt(energy / Math.PI) * 0.33; // inverse of entity formula to use same size
 
@@ -59,9 +63,8 @@ public class Corpse extends Entity {
 			die(world, "existed too much");
 		}
 
-		Rectangle2D bounds = world.getBorders().getBounds();
-		
 		addEnergy(-1 * 0.1 * Math.pow(1.00001, age * 50 * (1 + world.getLivingPopulation() / 500.0)));
+		this.mass = (this.startMass * Math.max(0.15, energy / this.startEnergy));
 
 		if(getEnergy() <= 0) {
 			die(world, "eaten");

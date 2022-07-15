@@ -1,5 +1,7 @@
 package me.brook.selection.screens;
 
+import java.awt.geom.Line2D;
+import java.awt.geom.Line2D.Double;
 import java.awt.geom.Rectangle2D;
 import java.util.ArrayList;
 import java.util.List;
@@ -23,6 +25,7 @@ import me.brook.selection.entity.Agent.NearbyEntry;
 import me.brook.selection.entity.Corpse;
 import me.brook.selection.entity.Entity;
 import me.brook.selection.entity.body.Structure;
+import me.brook.selection.tools.Border.LineLocation;
 import me.brook.selection.tools.Vector2;
 
 public class EntityScreen extends DisplayScreen {
@@ -40,7 +43,7 @@ public class EntityScreen extends DisplayScreen {
 	public void render(float delta) {
 		super.render(delta);
 
-		display.buildAgents();
+		engine.getDisplay().buildAgents();
 		ScreenUtils.clear(0.1f, 0.1f, 0.1f, 1);
 		renderEntities();
 		display.drawInfo(true);
@@ -85,6 +88,20 @@ public class EntityScreen extends DisplayScreen {
 		// (float) bounds.getWidth(), (float) bounds.getHeight());
 		// }
 
+		// render corpses
+		List<Entity> toRender = new ArrayList<>(engine.getWorld().getEntities());
+		batch.setShader(null);
+		for(int i = 0; i < toRender.size(); i++) {
+			Entity entity = toRender.get(i);
+			if(entity != null) {
+				if(entity instanceof Corpse) {
+					renderEntity(display.berrySprite, entity);
+					toRender.remove(entity);
+					i--;
+				}
+			}
+		}
+
 		batch.setShader(agentShader);
 		// draw agents
 
@@ -103,21 +120,23 @@ public class EntityScreen extends DisplayScreen {
 
 		}
 
-		// render corpses
-		List<Entity> toRender = new ArrayList<>(engine.getWorld().getEntities());
-		batch.setShader(null);
-		for(int i = 0; i < toRender.size(); i++) {
-			Entity entity = toRender.get(i);
-			if(entity != null) {
-				if(entity instanceof Corpse) {
-					renderEntity(display.berrySprite, entity);
-					toRender.remove(entity);
-					i--;
-				}
-			}
-		}
-
 		batch.end();
+		
+
+//		// draw world polygons
+//		List<LineLocation> lines = engine.getWorld().getBorders().getTerrainLines();
+//		shapes.setProjectionMatrix(worldCamera.combined);
+//		shapes.begin(ShapeType.Filled);
+//		
+//		shapes.setColor(Color.GREEN);x
+//		Vector2 offset = new Vector2(bounds.getMinX(), bounds.getMinY());
+//		for(LineLocation ll : lines) {
+//			
+//			Vector2 v2 = ll.getLocation().add(ll.getNormal().multiply(5));
+//			shapes.rectLine(ll.getLocation().x + offset.x, ll.getLocation().y + offset.y, v2.x + offset.x, v2.y + offset.y, .1f);
+//		}
+//		
+//		shapes.end();
 
 		Entity sel = engine.getWorld().getSelectedEntity();
 

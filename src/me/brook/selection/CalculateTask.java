@@ -42,13 +42,18 @@ public class CalculateTask implements Callable<String> {
 			if(e == null)
 				continue;
 
+			Agent a = null;
 			if(e.isAgent()) {
-				Agent a = (Agent) e;
+				a = (Agent) e;
 
 				a.calculateOutputs();
 				a.useBrainOutput();
 			}
 			e.tick(world);
+
+			if(a != null) {
+				a.createShadowRegion(world.getEngine().getDisplay().calcShadowWidth(), world.getEngine().getDisplay().calcShadowHeight());
+			}
 
 			processed++;
 		}

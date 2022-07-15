@@ -1,2 +1,2 @@
-nvcc -m64 -ptx JCudaKernelHormones.cu -o JCudaKernelHormones.ptx 
+nvcc -m64 -ptx JCudaKernelPressure.cu -o JCudaKernelPressure.ptx 
 pause

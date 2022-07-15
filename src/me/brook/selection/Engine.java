@@ -78,7 +78,7 @@ public class Engine extends Game {
 			this.value = value;
 		}
 	}
-	
+
 	@Override
 	public void render() {
 		if(!finishedLoading) {
@@ -101,16 +101,19 @@ public class Engine extends Game {
 		try {
 			long now = System.nanoTime();
 			if((fps != 0 && lastUpdate + delay < now) || (fps < 0)) {
-				world.update();
-				int frames = (int) (now - lastUpdate);
-				if(fps_history.size() > 100) {
-					fps_sum -= fps_history.remove(0).value;
+				boolean ticked = world.update();
+
+				if(ticked) {
+					int frames = (int) (now - lastUpdate);
+					if(fps_history.size() > 100) {
+						fps_sum -= fps_history.remove(0).value;
+					}
+
+					fps_sum += frames;
+					fps_history.add(new Digit(frames));
+
+					lastUpdate = now;
 				}
-
-				fps_sum += frames;
-				fps_history.add(new Digit(frames));
-
-				lastUpdate = now;
 			}
 
 		}
@@ -124,7 +127,7 @@ public class Engine extends Game {
 	public LibDisplay getDisplay() {
 		return libDisplay;
 	}
-	
+
 	@Override
 	public void create() {
 		libDisplay.create();
@@ -162,13 +165,16 @@ public class Engine extends Game {
 				world.getBorders().addWorldMap(world.getSeed(),
 						(int) world.getBorders().getBounds().getWidth(), (int) world.getBorders().getBounds().getHeight());
 				loadingStage = "Spawning agents";
-					world.configureAllAgents();
+				world.configureAllAgents();
 				loadingStage = "Building agents";
-				
+
 			});
+//			queue.add((Runnable) () -> {
+//				world.getBorders().generatePolygonsFromMap();
+//			});
 			queue.add((Runnable) () -> {
 				libDisplay.buildAgents();
-				
+
 				Gdx.input.setInputProcessor(new InputDetector(this));
 				setRenderingMode(RenderingMode.ENTITIES);
 			});
@@ -225,8 +231,8 @@ public class Engine extends Game {
 				return super.closeRequested();
 			}
 		});
-		
-			new Lwjgl3Application(_engine, config);
+
+		new Lwjgl3Application(_engine, config);
 	}
 
 	public int getFps() {
@@ -285,11 +291,11 @@ public class Engine extends Game {
 	public void setRenderingMode(RenderingMode renderingMode) {
 		this.renderingMode = renderingMode;
 		libDisplay.updateScreen(renderingMode);
-		
-//		if(renderingMode == RenderingMode.FAST)
-//			Gdx.graphics.setContinuousRendering(false);
-//		else
-//			Gdx.graphics.setContinuousRendering(true);
+
+		// if(renderingMode == RenderingMode.FAST)
+		// Gdx.graphics.setContinuousRendering(false);
+		// else
+		// Gdx.graphics.setContinuousRendering(true);
 	}
 
 	private World loadWorld(String path) {
@@ -330,7 +336,7 @@ public class Engine extends Game {
 	public String getSaveLocationPath() {
 		return saveLocationPath;
 	}
-	
+
 	public long getCurrentThreadID() {
 		return currentThreadID;
 	}

@@ -25,7 +25,7 @@ public class AgentLife extends Agent {
 
 	private static final int entitiesToTrack = 1;
 	// sunlight, hue, relative x, relative y, energy, speed, nearby count, to light
-	public static final int totalInputs = 12 + 6 * entitiesToTrack, outputs = 9;
+	public static final int totalInputs = 12 + 6 * entitiesToTrack, outputs = 10;
 
 	public AgentLife(World world, Species<Agent> parentSpecies, Color color, double speed, double size, Vector2 location, boolean makeBrain) {
 		super(world, parentSpecies, color, speed, size, location, true);
@@ -97,13 +97,20 @@ public class AgentLife extends Agent {
 	}
 
 	private void heal() {
-		if(wantsToHeal >= 0 && health < maxHealth) {
+		if(wantsToHeal > 0 && health < maxHealth && energy > 0) {
 			// max heal speed of (size*metabolism) per second and 1 hp = 1000 energy
-			double energyToUse = wantsToHeal * getMass() * currentMetabolism * 3;
+			double energyToUse = wantsToHeal * getMass() * 50;
 			energyToUse = Math.min(energyToUse, this.energy);
+			
+			if(energyToUse == 0)
+				return;
+			
 			addEnergy(-energyToUse);
 			
 			double add = energyToUse / getEnergyPerHP();
+			
+//			if(wantsToHeal > 0.5)
+//				world.setSelectedEntity(this);
 
 			this.health += add;
 			if(health > maxHealth)
@@ -151,20 +158,23 @@ public class AgentLife extends Agent {
 
 						if(attack) {
 
-							double damage = getTotalMass() * currentMetabolism * 0.25;
+							double mass = getTotalMass();
 							// size modifier
-							damage *= (this.getTotalMass() / (prey.getTotalMass() + this.getTotalMass()));
-
+							double sizeMod = (this.getTotalMass() / (prey.getTotalMass() + this.getTotalMass()));
+							double attackingAttackerMod = 1;
+							
 							// reduce damage when attacking a hunter cell
 							if(isAttackingHunterCell) {
-								damage *= this.getTotalMass() / (this.getTotalMass() + prey.getTotalMass());
-
 								// if hitting a hunter cell, compare total of hunter cells
 
-								damage *= myCellCount / (myCellCount + preyCellCount);
+								attackingAttackerMod = ((double) myCellCount) / (myCellCount + preyCellCount);
 							}
+							double damage = 1 * mass* myCellCount * sizeMod * attackingAttackerMod;
 
-							damage *= myCellCount;
+							
+							if(damage == 0) {
+								continue; 
+							}
 
 							double damageResult = prey.damage(this, damage);
 
@@ -204,7 +214,7 @@ public class AgentLife extends Agent {
 
 						if(attack) {
 
-							double damage = getTotalMass() * currentMetabolism * 0.25;
+							double damage = getTotalMass() * 0.25;
 							damage *= 10; // increase eating of corpses since they're dead
 							// size modifier
 							damage *= this.structure.getByType(Structure.HUNT).size();
@@ -244,13 +254,13 @@ public class AgentLife extends Agent {
 		// add quick and easy connections
 
 		brain.setWeightOf(brain.getLayers().get(0).get(totalInputs).getNeuronID(), brain.getLayers().get(1).get(1).getNeuronID(), 0); // bias to move
-		brain.setWeightOf(brain.getLayers().get(0).get(totalInputs).getNeuronID(), brain.getLayers().get(1).get(3).getNeuronID(), 1); // bias to light
-		brain.setWeightOf(brain.getLayers().get(0).get(totalInputs).getNeuronID(), brain.getLayers().get(1).get(4).getNeuronID(), 1); // bias to chem
-		brain.setWeightOf(brain.getLayers().get(0).get(totalInputs).getNeuronID(), brain.getLayers().get(1).get(6).getNeuronID(), 1); // bias to attack
-		brain.setWeightOf(brain.getLayers().get(0).get(totalInputs).getNeuronID(), brain.getLayers().get(1).get(8).getNeuronID(), 1); // bias to digest
-		brain.setWeightOf(brain.getLayers().get(0).get(totalInputs).getNeuronID(), brain.getLayers().get(1).get(2).getNeuronID(), 1); // bias to fuck
+		brain.setWeightOf(brain.getLayers().get(0).get(totalInputs).getNeuronID(), brain.getLayers().get(1).get(4).getNeuronID(), 1); // bias to light
+		brain.setWeightOf(brain.getLayers().get(0).get(totalInputs).getNeuronID(), brain.getLayers().get(1).get(5).getNeuronID(), 1); // bias to chem
+		brain.setWeightOf(brain.getLayers().get(0).get(totalInputs).getNeuronID(), brain.getLayers().get(1).get(7).getNeuronID(), 1); // bias to attack
+		brain.setWeightOf(brain.getLayers().get(0).get(totalInputs).getNeuronID(), brain.getLayers().get(1).get(9).getNeuronID(), 1); // bias to digest
+		brain.setWeightOf(brain.getLayers().get(0).get(totalInputs).getNeuronID(), brain.getLayers().get(1).get(3).getNeuronID(), 1); // bias to fuck
 
-		brain.labelOutputs("rotate", "force", "dtf", "light", "chemo", "heal", "attack", "hold", "digest");
+		brain.labelOutputs("rotate", "forceX", "forceY", "dtf", "light", "chemo", "heal", "attack", "hold", "digest");
 
 		String[] entityLabels = new String[] { "r", "g", "b", "dist", "rot", "f value" };
 		String[] inputs = new String[totalInputs];
@@ -338,7 +348,7 @@ public class AgentLife extends Agent {
 				inputs[index++] = c.getRed() / 255.0;
 				inputs[index++] = c.getGreen() / 255.0;
 				inputs[index++] = c.getBlue() / 255.0;
-				inputs[index++] = (relClosest.distanceToSq(this.location)) / (1 + sight_range);
+				inputs[index++] = 1 / (1 + relClosest.distanceToSq(this.location));
 				inputs[index++] = relativeAngleTo(this.relative_direction, closest.entity.relative_direction); // show entity's direction relative to our own
 				inputs[index++] = 1.0 / (1 + closest.entity.getEnergy() / 10000.0);
 
@@ -561,29 +571,22 @@ public class AgentLife extends Agent {
 		if(lastNearbyEntities == null)
 			return;
 		int nearbySize = 0;
-		for(Entity ne : collisionInfo.keySet())
-			if(ne.isAgent() && ne.getLocation().distanceToSq(this.location) < sight_range &&
-					((Agent) ne).wantsToPhotosynthesize)
+		for(NearbyEntry ne : lastNearbyEntities)
+			if(ne.getKey().isAgent() && ne.getKey().getLocation().distanceToSq(this.location) < sight_range &&
+					((Agent) ne.getKey()).wantsToPhotosynthesize)
 				nearbySize++;
 
 		// double competition = Math.max(0, Math.min(1, (size - entitiesBlockingLightFactor) / size));
 		double intensity = getLightReceived();
-		double dietMod = getDietModifier(true);
 		double competition = Math.max(0, Math.min(1, (1.0 / (1 + Math.pow(nearbySize, 1))))); // nearby agents reduce light for this agent
 		this.lastLightExposure = (float) intensity;
 
-		double gain = 30 * intensity;
-		gain *= dietMod;
+		double gain = 100 * intensity;
 		gain *= competition;
-		gain *= currentMetabolism;
 		// gain *= world.getSkillFactor();
 
 		// if(isSelected())
 		// System.out.println(gain);
-		
-		if(isSelected()) {
-//			System.out.println(gain);
-		}
 
 		world.totalLightGained += gain;
 		addEnergy(gain);
@@ -599,20 +602,18 @@ public class AgentLife extends Agent {
 			if(ne.getKey().isAgent() && ne.getKey().getLocation().distanceToSq(this.location) < sight_range &&
 					((Agent) ne.getKey()).wantsToChemosynthesize)
 				nearbySize++;
-		double competition = Math.max(0, Math.min(1, (1.0 / (1 + Math.pow(nearbySize, 1))))); // nearby agents reduce light for this agent
+		double competition = Math.max(0, Math.min(1, (1.0 / (1 + Math.pow(nearbySize, 2))))); // nearby agents reduce light for this agent
 		double intensity = getChemsReceived();
-		double dietMod = getDietModifier(false);
 
-		double gain = 35 * intensity;
+		double gain = 70 * intensity;
 		gain *= competition;
-		gain *= dietMod;
-		gain *= currentMetabolism;
 		// gain *= world.getSkillFactor();
 
 		world.totalChemsGained += gain;
 		addEnergy(gain);
 		chemGained += gain;
-		this.lastLightExposure = (float) getChemsReceived();
+		this.lastChemicalExposure = (float) getChemsReceived();
+		
 	}
 
 	private double getLightReceived() {
