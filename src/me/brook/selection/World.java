@@ -9,6 +9,8 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.attribute.BasicFileAttributes;
@@ -30,7 +32,6 @@ import java.util.function.Predicate;
 
 import org.nustaq.serialization.FSTConfiguration;
 import org.nustaq.serialization.FSTObjectInput;
-import org.nustaq.serialization.FSTObjectOutput;
 
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.Pixmap;
@@ -190,118 +191,6 @@ public class World {
 
 	}
 
-	private void loadWorldSave(String path) {
-
-		// load all brains into entities
-		File parent = new File(path);
-		File newest = null;
-		long ntime = 0;
-
-		// get latest save
-		if(parent.exists())
-			for(File f : parent.listFiles()) {
-				if(f.isDirectory()) {
-
-					if(f.getName().contains("autosave")) {
-						long t = 0;
-						try {
-							t = Files.readAttributes(Paths.get(f.getAbsolutePath()),
-									BasicFileAttributes.class).lastModifiedTime().toMillis();
-						}
-						catch(IOException e) {
-							e.printStackTrace();
-						}
-
-						if(newest == null || t > ntime) {
-							newest = f;
-							ntime = t;
-						}
-					}
-				}
-			}
-
-		if(newest != null) {
-			parent = newest;
-			List<Agent> loadedAgents = new ArrayList<>();
-			// load innovation history
-			try {
-				FileInputStream fis = new FileInputStream(new File(parent, "world.json"));
-				FSTObjectInput in = new FSTObjectInput(fis);
-
-				Object ob = in.readObject(HashMap.class);
-
-				in.close();
-				fis.close();
-
-				HashMap<String, Object> worldSave = (HashMap<String, Object>) ob;
-
-				String handshake = (String) worldSave.get("uwu");
-				if(!handshake.equals("owo")) {
-					System.err.println("oopsie! wooks wike we gots a wittle bug still!");
-				}
-
-				innovationHistory = (InnovationHistory) worldSave.get("innovationhistory");
-				ticksSinceRestart = (int) worldSave.get("ticksSinceRestart");
-				this.startTimeFromSave = this.ticksSinceRestart;
-				seed = (int) worldSave.get("seed");
-
-				SaveState[] savedEntities = (SaveState[]) worldSave.get("entities");
-				// load each brain
-
-				if(savedEntities == null || savedEntities.length == 0) {
-					System.err.println("Couldn't load 'savedEntities'. Object is null or empty.");
-					System.exit(1);
-				}
-
-				List<Entity> loadedEntities = new ArrayList<>(savedEntities.length);
-
-				for(SaveState save : savedEntities) {
-					Entity entity = Entity.load(this, save);
-
-					if(entity.isAgent()) {
-						((Agent) entity).getBrain().setInnovationHistory(innovationHistory);
-						((Agent) entity).getBrain().update();
-						loadedAgents.add((Agent) entity);
-					}
-					loadedEntities.add(entity);
-				}
-
-				if(!loadedAgents.isEmpty()) { // how empty? bug
-
-					speciesManager = new SpeciesManager<Agent>(1, 10, loadedAgents.get(0));
-					speciesManager.distributeOrMakeNewSpecies(loadedAgents);
-					loadedAgents.forEach(e -> {
-						double energy = e.getEnergy();
-						int age = e.getAge();
-						double bodyMaintainanceEnergy = e.getBodyMaintainanceEnergy();
-						e.reset();
-						// change values back after resetting some regulatory values
-						e.setEnergy(energy);
-						e.setAge(age);
-						e.setBodyMaintainanceEnergy(bodyMaintainanceEnergy);
-					});
-
-				}
-				loadedEntities.forEach(e -> addEntity(e));
-				loadedEntities.forEach(e -> e.init());
-
-				wasLoadedFromSave = true;
-			}
-			catch(IOException e) {
-				e.printStackTrace();
-				if(e.getCause() != null)
-					e.getCause().printStackTrace();
-				System.exit(1);
-			}
-			catch(Exception e1) {
-				e1.printStackTrace();
-				System.exit(1);
-			}
-
-		}
-
-	}
-
 	public void configureAllAgents() {
 
 		float index = 0;
@@ -369,7 +258,7 @@ public class World {
 		lastLivingPopulation = calculateLivingPopulation();
 
 		// make sure to save after threads are guaranteed to be finished
-		if(this.ticksSinceRestart != 0 && this.ticksSinceRestart % 25000 == 0 && this.ticksSinceRestart != startTimeFromSave) {
+		if(this.ticksSinceRestart != 0 && this.ticksSinceRestart % 5000 == 0 && this.ticksSinceRestart != startTimeFromSave) {
 			save(true);
 		}
 
@@ -394,6 +283,11 @@ public class World {
 				System.err.println("toBuild array too full.");
 				for(int i = 0; i < toBuild.size(); i++) {
 					Agent a = toBuild.get(i);
+					if(a == null) {
+						toBuild.remove(i);
+						i--;
+						continue;
+					}
 
 					if(a.isAlive() && a.shouldExist()) {
 						// do nothing
@@ -839,6 +733,8 @@ public class World {
 		return borders;
 	}
 
+//	public static FSTConfiguration fstConf = FSTConfiguration.createDefaultConfiguration();
+
 	public void save(boolean autosave) {
 
 		if(isMultithreading()) {
@@ -850,8 +746,6 @@ public class World {
 				continue;
 			}
 		}
-
-		System.out.println("Saving...");
 
 		// create new list to avoid thread nonsense
 		File parent = new File(engine.getSaveLocationPath());
@@ -911,37 +805,167 @@ public class World {
 				index++;
 			}
 
+//			boolean running = true;
+			// while(running) {
+			// getAngleOfSun();
+
 			HashMap<String, Object> worldSave = new HashMap<String, Object>();
 			worldSave.put("uwu", "owo");
 			worldSave.put("ticksSinceRestart", this.ticksSinceRestart);
 			worldSave.put("seed", this.seed);
-			worldSave.put("innovationhistory", this.innovationHistory);
+			worldSave.put("innovationhistory", innovationHistory);
 			worldSave.put("entities", saveStates);
 
-			// run saving inside a thread to prevent lag spike.
-			// all data is locked into the worldSave and won't be changed
-			Thread t = new Thread((Runnable) () -> {
-				try {
-					FileOutputStream fos = new FileOutputStream(new File(sub, "world.json"));
-					FSTObjectOutput out = new FSTObjectOutput(fos);
-					out.writeObject(worldSave, HashMap.class);
+			try {
+				FileOutputStream fos = new FileOutputStream(new File(sub, "world.json"));
+				ObjectOutputStream oos = new ObjectOutputStream(fos);
+				oos.writeObject(worldSave);
+				
+				oos.close();
+				fos.close();
+				fos = null;
+				oos = null;
 
-					out.close();
-					fos.close();
-					out = null;
-					fos = null;
+				// check that data is readable
+//				try {
+//					HashMap<String, Object> test = (HashMap<String, Object>) fstConf.asObject(data);
+//					if(test != null && test.get("uwu").equals("owo")) {
+//						System.out.println("Byte array could be read.");
+//						System.out.println(test.toString());
+//					}
+//					else {
+//						System.err.println("Byte array could NOT be read.");
+//						System.err.println(test);
+//					}
+//					getAngleOfSun();
+//				}
+//				catch(Exception e) {
+//					e.printStackTrace();
+//				}
 
-					FSTConfiguration.clearGlobalCaches();
-				}
-				catch(Exception e) {
-					e.printStackTrace();
-				}
-			});
-			t.run();
+
+				FSTConfiguration.clearGlobalCaches();
+			}
+			catch(Exception e) {
+				e.printStackTrace();
+			}
+			// }
 
 		}
 		catch(Exception e1) {
 			e1.printStackTrace();
+		}
+
+	}
+
+	private void loadWorldSave(String path) {
+
+		// load all brains into entities
+		File parent = new File(path);
+		File newest = null;
+		long ntime = 0;
+
+		// get latest save
+		if(parent.exists())
+			for(File f : parent.listFiles()) {
+				if(f.isDirectory()) {
+
+					if(f.getName().contains("autosave")) {
+						long t = 0;
+						try {
+							t = Files.readAttributes(Paths.get(f.getAbsolutePath()),
+									BasicFileAttributes.class).lastModifiedTime().toMillis();
+						}
+						catch(IOException e) {
+							e.printStackTrace();
+						}
+
+						if(newest == null || t > ntime) {
+							newest = f;
+							ntime = t;
+						}
+					}
+				}
+			}
+
+		if(newest != null) {
+			parent = newest;
+			List<Agent> loadedAgents = new ArrayList<>();
+			// load innovation history
+			try {
+				FileInputStream fis = new FileInputStream(new File(parent, "world.json"));
+				ObjectInputStream ois = new ObjectInputStream(fis);
+				
+				Object ob = ois.readObject();
+
+				ois.close();
+				fis.close();
+
+				HashMap<String, Object> worldSave = (HashMap<String, Object>) ob;
+
+				String handshake = (String) worldSave.get("uwu");
+				if(!handshake.equals("owo")) {
+					System.err.println("oopsie! wooks wike we gots a wittle bug still! world nu woad handshakes :(");
+				}
+
+				innovationHistory = (InnovationHistory) worldSave.get("innovationhistory");
+				ticksSinceRestart = (int) worldSave.get("ticksSinceRestart");
+				this.startTimeFromSave = this.ticksSinceRestart;
+				seed = (int) worldSave.get("seed");
+
+				SaveState[] savedEntities = (SaveState[]) worldSave.get("entities");
+				// load each brain
+
+				if(savedEntities == null || savedEntities.length == 0) {
+					System.err.println("Couldn't load 'savedEntities'. Object is null or empty.");
+					System.exit(1);
+				}
+
+				List<Entity> loadedEntities = new ArrayList<>(savedEntities.length);
+
+				for(SaveState save : savedEntities) {
+					Entity entity = Entity.load(this, save);
+
+					if(entity.isAgent()) {
+						((Agent) entity).getBrain().setInnovationHistory(innovationHistory);
+						((Agent) entity).getBrain().update();
+						loadedAgents.add((Agent) entity);
+					}
+					loadedEntities.add(entity);
+				}
+
+				if(!loadedAgents.isEmpty()) { // how empty? bug
+
+					speciesManager = new SpeciesManager<Agent>(1, 1000000000, loadedAgents.get(0));
+					speciesManager.distributeOrMakeNewSpecies(loadedAgents);
+					loadedAgents.forEach(e -> {
+						double energy = e.getEnergy();
+						int age = e.getAge();
+						double bodyMaintainanceEnergy = e.getBodyMaintainanceEnergy();
+						e.reset();
+						// change values back after resetting some regulatory values
+						e.setEnergy(energy);
+						e.setAge(age);
+						e.setBodyMaintainanceEnergy(bodyMaintainanceEnergy);
+					});
+
+				}
+				loadedEntities.forEach(e -> addEntity(e));
+				loadedEntities.forEach(e -> e.init());
+
+				wasLoadedFromSave = true;
+			}
+			catch(IOException e) {
+				e.printStackTrace();
+				if(e.getCause() != null)
+					e.getCause().printStackTrace();
+				System.exit(1);
+			}
+			catch(Exception e1) {
+				e1.printStackTrace();
+				System.exit(1);
+			}
+
 		}
 
 	}

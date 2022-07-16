@@ -283,7 +283,7 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 		}
 
 		// calculate maturity
-		this.maturity = (this.age / ((structure.getStructure().size() * 1000.0) / baseMetabolism));
+		this.maturity = (this.age / ((structure.getStructure().size() * 1000.0)));
 		this.currentMetabolism = (0.5 + this.baseMetabolism) * (1 - Math.max(0, this.maturity - 1));
 		if(currentMetabolism < 0) {
 			currentMetabolism = 0;
@@ -1483,7 +1483,7 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 	}
 
 	protected double getEnergyPerHP() {
-		return 50;
+		return 33;
 	}
 
 	public double damage(Entity attacker, double damage) {
@@ -1750,8 +1750,17 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 		bottomCorner = toQuadVector(bottomCorner, mapWidth, mapHeight, bounds);
 
 		FloatArray vertices = new FloatArray(new float[] {
-				leftCorner.x, leftCorner.y, bottomCorner.x, bottomCorner.y, rightCorner.x, rightCorner.y,
-				rightCorner.x, (float) bounds.getMinY(), leftCorner.x, (float) bounds.getMinY() });
+				leftCorner.x, leftCorner.y,
+				bottomCorner.x, bottomCorner.y,
+				leftCorner.x, (float) bounds.getMinY(),
+
+				bottomCorner.x, bottomCorner.y,
+				rightCorner.x, (float) bounds.getMinY(),
+				leftCorner.x, (float) bounds.getMinY(),
+
+				bottomCorner.x, bottomCorner.y,
+				rightCorner.x, rightCorner.y,
+				rightCorner.x, (float) bounds.getMinY(), });
 		// FloatArray vertices = new FloatArray(new float[] {
 		// 0, 0, 0, resolution, resolution, 0 });
 		ShortArray tris = triangulator.computeTriangles(vertices);
@@ -1759,7 +1768,15 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 		
 		this.setComputedShadowRegion(region);
 	}
-
+	
+	protected boolean hitWall = false;
+	
+	@Override
+	protected void hitWall() {
+		super.hitWall();
+		hitWall = true;
+	}
+	
 	private Vector2 toQuadVector(Vector2 vector2, int width, int height, Rectangle2D worldbounds) {
 		float x = (float) (((vector2.x - worldbounds.getMinX()) / worldbounds.getWidth()) * width);
 		float y = (float) (((vector2.y - worldbounds.getMinY()) / worldbounds.getHeight()) * height);

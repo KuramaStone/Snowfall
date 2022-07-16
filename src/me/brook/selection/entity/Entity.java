@@ -134,7 +134,7 @@ public abstract class Entity implements QuadSortable, Comparable<Entity> {
 		}
 		else {
 			// calculate normal for wall
-			this.velocity = new Vector2();
+			hitWall();
 		}
 
 		try {
@@ -152,6 +152,10 @@ public abstract class Entity implements QuadSortable, Comparable<Entity> {
 		if(!velocity.isFinite())
 			die(world, "shame");
 
+	}
+
+	protected void hitWall() {
+		this.velocity = new Vector2();
 	}
 
 	protected void stuckInWall() {

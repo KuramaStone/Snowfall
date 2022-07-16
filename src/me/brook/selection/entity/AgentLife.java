@@ -74,6 +74,8 @@ public class AgentLife extends Agent {
 		heal();
 		this.hitbox = buildHitbox();
 		lastHealth = (float) health;
+		hitWall = false;
+		
 	}
 
 	@Override
@@ -99,7 +101,7 @@ public class AgentLife extends Agent {
 	private void heal() {
 		if(wantsToHeal > 0 && health < maxHealth && energy > 0) {
 			// max heal speed of (size*metabolism) per second and 1 hp = 1000 energy
-			double energyToUse = wantsToHeal * getMass() * 50;
+			double energyToUse = 1 * getMass() * 50;
 			energyToUse = Math.min(energyToUse, this.energy);
 			
 			if(energyToUse == 0)
@@ -108,6 +110,7 @@ public class AgentLife extends Agent {
 			addEnergy(-energyToUse);
 			
 			double add = energyToUse / getEnergyPerHP();
+//			System.out.println(energyToUse + " " + add + " " + getMass() + " " + this.energy);
 			
 //			if(wantsToHeal > 0.5)
 //				world.setSelectedEntity(this);
@@ -386,7 +389,7 @@ public class AgentLife extends Agent {
 		inputs[index++] = 1.0 / (1 + this.getEnergy());
 		inputs[index++] = 1.0 / (1 + lastNearbyEntities.size());
 		inputs[index++] = relativeAngleTo(Math.PI / 2, relative_direction); // to light is just their direction relative to up
-		inputs[index++] = isFacingWall ? 1 : 0; // world.getFoodNoise(getLocation().x, getLocation().y);
+		inputs[index++] = hitWall ? 1 : 0; // world.getFoodNoise(getLocation().x, getLocation().y);
 		inputs[index++] = lastShadowValue; // shadow value
 		inputs[index++] = 1.0 / (1 + getTicksSinceLastHurt()); // hurting
 		inputs[index++] = isAttacking ? 1 : 0; // hurting
@@ -605,9 +608,12 @@ public class AgentLife extends Agent {
 		double competition = Math.max(0, Math.min(1, (1.0 / (1 + Math.pow(nearbySize, 2))))); // nearby agents reduce light for this agent
 		double intensity = getChemsReceived();
 
-		double gain = 70 * intensity;
+		double gain = 50 * intensity;
 		gain *= competition;
 		// gain *= world.getSkillFactor();
+		
+		if(isSelected())
+			getAge();
 
 		world.totalChemsGained += gain;
 		addEnergy(gain);
@@ -664,7 +670,7 @@ public class AgentLife extends Agent {
 
 	@Override
 	public void mutate(float multiplier) {
-		double geneMultiplier = this.geneMultiplier * 2;
+		double geneMultiplier = this.geneMultiplier * 0.5;
 		double geneFactor = this.geneFactor;
 
 		brain.mutateNetwork(

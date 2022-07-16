@@ -17,10 +17,13 @@ import com.badlogic.gdx.Input;
 import com.badlogic.gdx.assets.AssetManager;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.GL20;
+import com.badlogic.gdx.graphics.Mesh;
 import com.badlogic.gdx.graphics.OrthographicCamera;
 import com.badlogic.gdx.graphics.Pixmap;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.Texture.TextureFilter;
+import com.badlogic.gdx.graphics.VertexAttribute;
+import com.badlogic.gdx.graphics.VertexAttributes.Usage;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.GlyphLayout;
 import com.badlogic.gdx.graphics.g2d.PolygonRegion;
@@ -29,6 +32,7 @@ import com.badlogic.gdx.graphics.g2d.Sprite;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.graphics.glutils.FrameBuffer;
+import com.badlogic.gdx.graphics.glutils.ImmediateModeRenderer20;
 import com.badlogic.gdx.graphics.glutils.ShaderProgram;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer.ShapeType;
@@ -122,15 +126,14 @@ public class LibDisplay {
 		infoScreen = new InfoScreen(this);
 		loadingScreen = new LoadingScreen(this);
 		fastScreen = new FastScreen(this);
-		
-		
+
 		Pixmap pix = new Pixmap(1, 1, Pixmap.Format.Alpha);
 		pix.setColor(new Color(0, 0, 1, 1f));
 		pix.fill();
 		Texture texture = new TextureTracker(pix);
 		shadowBackgroundTexture = new TextureRegion(texture);
 		pix.dispose();
-		
+
 		updateScreen(engine.getRenderingMode());
 	}
 
@@ -266,8 +269,9 @@ public class LibDisplay {
 		int height = calcShadowHeight();
 		Rectangle2D bounds = engine.getWorld().getBorders().getBounds2D();
 
-		shadowBuffer = new FrameBuffer(Pixmap.Format.Alpha, width, height,
-				false);
+		if(shadowBuffer == null)
+			shadowBuffer = new FrameBuffer(Pixmap.Format.Alpha, width, height,
+					false);
 
 		Matrix4 matrix = new Matrix4();
 		matrix.setToOrtho2D(0, 0, width, height);
@@ -296,16 +300,13 @@ public class LibDisplay {
 		lastShadowTexture.flip(false, true);
 
 		shadowBuffer.end();
-		shadowBuffer.dispose();
+		// shadowBuffer.dispose();
 
 		int length = buf.limit();
 		byte[] array = new byte[length];
 		buf.get(array);
 		this.shadowByteArray = array;
 		this.shadowDimensions = new Vector2(width, height);
-
-		// drawShadows(polybatch, worldCamera.combined, toRender, -1, bounds);
-
 	}
 
 	private void drawShadows(PolygonSpriteBatch polybatch, Matrix4 matrix, List<Entity> toRender, int width, int height, Rectangle2D bounds) {
@@ -314,15 +315,21 @@ public class LibDisplay {
 
 		polybatch.setBlendFunction(GL20.GL_ONE, GL20.GL_ONE_MINUS_CONSTANT_ALPHA);
 
-		polybatch.begin();
-
-		// initialize variables
-		EarClippingTriangulator triangulator = new EarClippingTriangulator();
-
+		// polybatch.begin();
 		PolygonRegion polyRegion;
 
 		polybatch.setColor(0, 0, 0, 0.5f);
 
+		int maxVertices = (9) * toRender.size();
+		ImmediateModeRenderer20 ir = new ImmediateModeRenderer20(maxVertices, false, true, 0);
+
+		org.lwjgl.opengl.GL20.glEnable(org.lwjgl.opengl.GL20.GL_BLEND);
+		org.lwjgl.opengl.GL20.glBlendFunc(org.lwjgl.opengl.GL20.GL_ONE, org.lwjgl.opengl.GL20.GL_ONE_MINUS_CONSTANT_ALPHA);
+
+		ir.begin(matrix, GL20.GL_TRIANGLES);
+		ScreenUtils.clear(0, 0, 0, 0);
+
+		float colorBits = new Color(0, 0, 0, 0.5f).toFloatBits();
 		for(int i = 0; i < toRender.size(); i++) {
 			Entity entity = toRender.get(i);
 			if(entity != null) {
@@ -332,25 +339,27 @@ public class LibDisplay {
 					if(box == null)
 						continue;
 
-					// double lightAt = engine.getWorld().getLightAt(agent.getLocation());
-					// if(lightAt < 0.1) {
-					// continue; // we realistically don't need shadows if the natural light is already black
-					// }
-
-					// generate quad stretching from agent corners to back wall and render that shape
-
 					polyRegion = agent.getComputedShadowRegion();
 					if(polyRegion == null)
 						continue;
+					
+					float[] vertices = polyRegion.getVertices();
 
-					polybatch.draw(polyRegion, 0, 0);
+					for(int j = 0; j < vertices.length;) {
+						ir.color(colorBits);
+						ir.vertex(vertices[j++], vertices[j++], 0);
+					}
+
+					// polybatch.draw(polyRegion, 0, 0);
 
 					// shapes.rect(low.x, 0, high.x - low.x, low.y);
 				}
 			}
 		}
 
-		polybatch.end();
+		ir.end();
+		ir.dispose();
+		// polybatch.end();
 		Gdx.gl.glBlendEquation(GL20.GL_FUNC_ADD);
 	}
 
@@ -487,10 +496,22 @@ public class LibDisplay {
 				float startX = x;
 
 				if(agent.getLastOutputs() != null) {
+					Color[] colors = new Color[] {
+							Color.GRAY,
+							Color.WHITE, Color.WHITE,
+							Color.PINK,
+							Color.GREEN,
+							Color.ORANGE,
+							Color.GREEN,
+							Color.RED,
+							Color.WHITE,
+							Color.SALMON
+					};
 					shapes.setProjectionMatrix(staticCamera.combined);
 					shapes.begin(ShapeType.Filled);
+					int l = 0;
 					for(double out : agent.getLastOutputs()) {
-						shapes.setColor((out * 2 + 1 < 0) ? Color.WHITE : Color.GREEN);
+						shapes.setColor(colors[l]);
 						shapes.circle(x, y, size);
 
 						float theta = (float) (Math.PI / 2);
@@ -499,6 +520,8 @@ public class LibDisplay {
 						shapes.setColor(Color.GRAY);
 						shapes.rectLine(x, y, x + cos, y + sin, 2);
 						x += size * 2 * 1.1;
+
+						l++;
 					}
 					shapes.end();
 					// now draw strings
@@ -806,7 +829,7 @@ public class LibDisplay {
 
 		return pixmap;
 	}
-	
+
 	public TextureRegion getShadowBackgroundTexture() {
 		return shadowBackgroundTexture;
 	}

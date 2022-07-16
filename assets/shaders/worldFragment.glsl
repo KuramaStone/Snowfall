@@ -227,20 +227,20 @@ void main() {
 			vec3(stretchedCoords.x * 10, 1, time / 500), 1, 3, 0.5);
 	float lightBeam = pow(sunShimmer, 1.1) * lightBeamNoise;
 
-	float chemNoise = getSmoothNoiseAt(vec3(stretchedCoords * 4, time / 200), 2, 2,
-			0.8);
+	float chemNoise = getSmoothNoiseAt(vec3(stretchedCoords * 4, time / 200), 2,
+			2, 0.8);
 	chemNoise = 1 - (chemNoise * chemNoise);
 	float chemAt = ((pow(v_texCoords.y, 3))) * chemNoise;
 
 	vec2 shadowCoords = v_texCoords.xy;
-	shadowCoords.y = 1 - shadowCoords.y;
+	shadowCoords.y = 1-shadowCoords.y;
 
 	float entityShadows = max((1 - texture2D(shadowMap, shadowCoords).a), 0.25)
 			* lightValueAt(v_texCoords.y);
 	entityShadows = max(entityShadows, 0);
 	entityShadows = min(entityShadows, 1);
 	float min = 0.25;
-	entityShadows = min + (entityShadows * (1-min));
+	entityShadows = min + (entityShadows * (1 - min));
 
 	vec4 mix1 = waterColor; // water color
 	vec4 mix2 = interpolate(mix1, lightColor, sunShimmer); // add sine wave sun shimmer
@@ -251,16 +251,12 @@ void main() {
 
 	vec4 worldColor = texture2D(worldMap, v_texCoords);
 	worldColor.a = 1;
-	if(worldColor.rgb == vec3(0, 0, 1))
+	if (worldColor.rgb == vec3(0, 0, 1))
 		gl_FragColor = mix5;
 	else
 		gl_FragColor = worldColor;
 
-//	float x = v_texCoords.x * 8000;
-//	float y = v_texCoords.y * 8000 * (9.0/16);
-//	float scale = 1 / 1800.0;
-//	gl_FragColor = vec4(vec3(getSmoothNoiseAt(vec3(x, y, 53264376) * scale * 30, 3,
-//			0.25, 2)), 1);
+//	gl_FragColor = vec4(vec3(entityShadows), 1);
 
 }
 
