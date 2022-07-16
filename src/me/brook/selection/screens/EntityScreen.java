@@ -1,9 +1,9 @@
 package me.brook.selection.screens;
 
-import java.awt.geom.Line2D;
-import java.awt.geom.Line2D.Double;
 import java.awt.geom.Rectangle2D;
 import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -19,13 +19,13 @@ import com.badlogic.gdx.math.Vector3;
 import com.badlogic.gdx.utils.ScreenUtils;
 
 import me.brook.selection.LibDisplay;
+import me.brook.selection.LibDisplay.AgentTextureStage;
 import me.brook.selection.entity.Agent;
 import me.brook.selection.entity.Agent.EntityViewInfo;
 import me.brook.selection.entity.Agent.NearbyEntry;
 import me.brook.selection.entity.Corpse;
 import me.brook.selection.entity.Entity;
 import me.brook.selection.entity.body.Structure;
-import me.brook.selection.tools.Border.LineLocation;
 import me.brook.selection.tools.Vector2;
 
 public class EntityScreen extends DisplayScreen {
@@ -101,42 +101,58 @@ public class EntityScreen extends DisplayScreen {
 				}
 			}
 		}
-
 		batch.setShader(agentShader);
-		// draw agents
-
-		Map<String, List<Agent>> listBySprite = display.getUsedTextures();
-		Map<String, Sprite> spriteByString = display.getTexturesByDna();
-
-		// sorting by sprite is faster due to not needing to swap textures
-		for(String dna : display.getUsedTextures().keySet()) {
-			Sprite sprite = spriteByString.get(dna);
-
-			for(Entity entity : listBySprite.get(dna)) {
-				if(entity != null) {
-					renderEntity(sprite, entity);
+		for(int i = 0; i < toRender.size(); i++) {
+			Entity entity = toRender.get(i);
+			if(entity != null) {
+				if(entity.isAgent()) {
+					Agent a = (Agent) entity;
+					renderEntity(a.getBodySprite(), entity);
+					toRender.remove(entity);
+					i--;
 				}
 			}
-
 		}
+//		Map<AgentTextureStage, HashSet<Agent>> listBySprite = display.getUsedTextures();
+//		Map<AgentTextureStage, Sprite> spriteByString = display.getTexturesByDna();
+//
+//		// sorting by sprite is faster due to not needing to swap textures
+//		for(AgentTextureStage ats : display.getUsedTextures().keySet()) {
+//			Sprite sprite = spriteByString.get(ats);
+//
+//			for(Entity entity : listBySprite.get(ats)) {
+//				if(entity != null) {
+//					renderEntity(sprite, entity);
+//				}
+//			}
+//
+//		}
 
 		batch.end();
-		
-
-//		// draw world polygons
-//		List<LineLocation> lines = engine.getWorld().getBorders().getTerrainLines();
+	
 //		shapes.setProjectionMatrix(worldCamera.combined);
 //		shapes.begin(ShapeType.Filled);
-//		
-//		shapes.setColor(Color.GREEN);x
-//		Vector2 offset = new Vector2(bounds.getMinX(), bounds.getMinY());
-//		for(LineLocation ll : lines) {
-//			
-//			Vector2 v2 = ll.getLocation().add(ll.getNormal().multiply(5));
-//			shapes.rectLine(ll.getLocation().x + offset.x, ll.getLocation().y + offset.y, v2.x + offset.x, v2.y + offset.y, .1f);
+//		List<Entity> points = new ArrayList<>(engine.getWorld().getEntities());
+//		shapes.setColor(Color.WHITE);
+//		for(Entity e : points) {
+//			shapes.rect(e.getLocation().x-4, e.getLocation().y-4, 8, 8);
 //		}
-//		
 //		shapes.end();
+
+		// // draw world polygons
+		// List<LineLocation> lines = engine.getWorld().getBorders().getTerrainLines();
+		// shapes.setProjectionMatrix(worldCamera.combined);
+		// shapes.begin(ShapeType.Filled);
+		//
+		// shapes.setColor(Color.GREEN);x
+		// Vector2 offset = new Vector2(bounds.getMinX(), bounds.getMinY());
+		// for(LineLocation ll : lines) {
+		//
+		// Vector2 v2 = ll.getLocation().add(ll.getNormal().multiply(5));
+		// shapes.rectLine(ll.getLocation().x + offset.x, ll.getLocation().y + offset.y, v2.x + offset.x, v2.y + offset.y, .1f);
+		// }
+		//
+		// shapes.end();
 
 		Entity sel = engine.getWorld().getSelectedEntity();
 
@@ -175,13 +191,14 @@ public class EntityScreen extends DisplayScreen {
 				shapes.rect((float) location.x - r, (float) location.y - r, r * 2, r * 2);
 
 				shapes.setColor(Color.MAGENTA);
-				for(Entity ent : agent.getAttachedEntities()) {
-					if(ent == null)
-						continue;
+				if(agent.getAttachedEntities() != null)
+					for(Entity ent : agent.getAttachedEntities()) {
+						if(ent == null)
+							continue;
 
-					Vector2 l = ent.getLocation();
-					shapes.line((float) l.x, (float) l.y, (float) location.x, (float) location.y);
-				}
+						Vector2 l = ent.getLocation();
+						shapes.line((float) l.x, (float) l.y, (float) location.x, (float) location.y);
+					}
 
 				shapes.setColor(Color.RED);
 				List<NearbyEntry> nearby = agent.getLastNearbyEntities();
@@ -224,7 +241,6 @@ public class EntityScreen extends DisplayScreen {
 			Agent agent = (Agent) entity;
 			if(!agent.isAlive())
 				return;
-			float alpha = 0;
 			// third value, b, is used for whether or not it is focused
 
 			if(agent.getTicksSinceLastHurt() < 20) {
@@ -237,19 +253,17 @@ public class EntityScreen extends DisplayScreen {
 					r = 1;
 					b = 0;
 					g = 0.3f;
-					alpha = 1f;
 				}
 				else {
 					r = 1;
 					g = 1;
 					b = 1;
-					alpha = 1;
 				}
 
-				batch.setColor(new Color(r, b, g, alpha));
+				batch.setColor(new Color(r, b, g, 1));
 			}
 			else
-				batch.setColor(new Color(1, 1, 1, alpha));
+				batch.setColor(new Color(agent.getHue(), 1, 1, 0));
 
 		}
 		else
@@ -271,11 +285,11 @@ public class EntityScreen extends DisplayScreen {
 			float zoom = 2f;
 			float sizePerSeg = Agent.getSizeOfSegment();
 			Structure structure = agent.getStructure();
-			w = (float) structure.getBounds().getWidth() * sizePerSeg * zoom;
-			h = (float) structure.getBounds().getHeight() * sizePerSeg * zoom;
+			w = (float) structure.getMaxBounds().getWidth() * sizePerSeg * zoom;
+			h = (float) structure.getMaxBounds().getHeight() * sizePerSeg * zoom;
 
-			ox = (structure.getCoreOffset().x + 0.5f) * sizePerSeg * zoom;
-			oy = (structure.getCoreOffset().y + 0.5f) * sizePerSeg * zoom;
+			ox = (structure.getMaxCoreOffset().x + 0.5f) * sizePerSeg * zoom;
+			oy = (structure.getMaxCoreOffset().y + 0.5f) * sizePerSeg * zoom;
 
 			ox = (ox - w / 2) * (1 / zoom) + w / 2;
 			oy = (oy - h / 2) * (1 / zoom) + h / 2;

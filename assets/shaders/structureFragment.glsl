@@ -173,13 +173,14 @@ void main() {
 							vec3((v_texCoords * vec2(width, height)) * 0.03,
 									id), 2, 2, 0.3) * 2 - 1);
 
-	v_texCoords *= waveNoise;
+//	v_texCoords *= waveNoise;
 
 	vec4 closestColor = vec4(0);
 	vec4 secondColor = vec4(0);
 
 	float closestDist = 10000000;
 	float secondClosestDist = 10000000;
+	int closestCellIndex = 0;
 	float totalDist = 0;
 	float totalHeat = 0;
 	float distTotal = 0;
@@ -195,6 +196,8 @@ void main() {
 		float g = positions[i * 6 + 4];
 		float b = positions[i * 6 + 5];
 		vec4 color = vec4(r, g, b, 1);
+		if(heat == 0)
+			continue;
 
 		float dist = pow(x - v_texCoords.x * width, 2)
 				+ pow(y - v_texCoords.y * height, 2);
@@ -205,6 +208,7 @@ void main() {
 
 			closestDist = dist;
 			closestColor = color;
+			closestCellIndex = i;
 		}
 		totalHeat += heat / (1 + dist * dist);
 
@@ -228,15 +232,16 @@ void main() {
 	if (totalHeat < 0.5)
 		alpha = 0;
 
-	if (closestDist < 0.6)
-		finalColor = vec4(0, 0, 0, 1);
-	if (closestDist < 0.5)
-		finalColor = vec4(hsv2rgb(vec3(hue, 1, 1)), 1);
+	if (closestCellIndex == 0) {
+		if (closestDist < 0.6)
+			finalColor = vec4(0, 0, 0, 1);
+		if (closestDist < 0.5)
+			finalColor = vec4(hsv2rgb(vec3(hue, 1, 1)), 1);
+	}
 
 	finalColor.a = alpha;
 
 	gl_FragColor = finalColor;
-//	gl_FragColor = vec4(vec3(waveNoise), 1);
 
 }
 

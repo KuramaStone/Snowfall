@@ -67,15 +67,50 @@ public class AgentLife extends Agent {
 		}
 		if(!shouldExist())
 			return;
-		
+
 		super.tick(world);
-		ejectFood();
+		grow();
 		attack();
 		heal();
 		this.hitbox = buildHitbox();
 		lastHealth = (float) health;
 		hitWall = false;
-		
+
+	}
+
+	protected void grow() {
+		if(maturity > 1)
+			return;
+
+		// structures to grow per tick
+		double growthRate = (structure.getStructure().size() - 1) / (calculateMaxAge() / 2);
+
+		int maxCells = structure.getStructure().size();
+		boolean passedNewRenderMark = false;
+		for(int i = 1; i < maxCells; i++) {
+			Segment seg = structure.getStructure().get(i);
+			if(seg.getDevelopment() == 1)
+				continue;
+
+			double stage = seg.getDevelopment();
+			double newStage = Math.min(1, stage + growthRate);
+
+			int id1 = (int) (stage / 0.1);
+			int id2 = (int) (newStage / 0.1);
+			// if the id has increased, then it is at a new stage of growth and we can rerender
+			// if it was zero, then we need to render the baby cell
+			if(id2 > id1 || stage == 0 || newStage == 1) {
+				passedNewRenderMark = true;
+			}
+
+			seg.setDevelopment(newStage);
+			break; // only grow first cell
+		}
+
+		structure.recalculateBounds();
+		if(passedNewRenderMark)
+			world.rerenderAgent(this);
+		this.hitbox = buildHitbox(this.location, (float) this.relative_direction);
 	}
 
 	@Override
@@ -103,17 +138,13 @@ public class AgentLife extends Agent {
 			// max heal speed of (size*metabolism) per second and 1 hp = 1000 energy
 			double energyToUse = 1 * getMass() * 50;
 			energyToUse = Math.min(energyToUse, this.energy);
-			
+
 			if(energyToUse == 0)
 				return;
-			
+
 			addEnergy(-energyToUse);
-			
+
 			double add = energyToUse / getEnergyPerHP();
-//			System.out.println(energyToUse + " " + add + " " + getMass() + " " + this.energy);
-			
-//			if(wantsToHeal > 0.5)
-//				world.setSelectedEntity(this);
 
 			this.health += add;
 			if(health > maxHealth)
@@ -165,18 +196,17 @@ public class AgentLife extends Agent {
 							// size modifier
 							double sizeMod = (this.getTotalMass() / (prey.getTotalMass() + this.getTotalMass()));
 							double attackingAttackerMod = 1;
-							
+
 							// reduce damage when attacking a hunter cell
 							if(isAttackingHunterCell) {
 								// if hitting a hunter cell, compare total of hunter cells
 
 								attackingAttackerMod = ((double) myCellCount) / (myCellCount + preyCellCount);
 							}
-							double damage = 1 * mass* myCellCount * sizeMod * attackingAttackerMod;
+							double damage = 1 * mass * myCellCount * sizeMod * attackingAttackerMod;
 
-							
 							if(damage == 0) {
-								continue; 
+								continue;
 							}
 
 							double damageResult = prey.damage(this, damage);
@@ -540,31 +570,31 @@ public class AgentLife extends Agent {
 	}
 
 	public void ejectFood() {
-//		if(wantsToEjectFood <= 2)
-//			return;
-//
-//		double energyToEject = (getMass() * size) * wantsToEjectFood;
-//
-//		Vector2 spawnAt = this.getLocation().add(new Vector2(this.relative_direction).multiply(size));
-//		if(!world.getBorders().contains(spawnAt.x, spawnAt.y)) {
-//			return;
-//		}
-//
-//		energyToEject = Math.min(this.getEnergy(), energyToEject); // cant eject more than remaining energy
-//
-//		// dont allow too small ejections. thousands of 1 energy dots sounds lame
-//		if(energyToEject < 5000) {
-//			return;
-//		}
-//
-//		this.addEnergy(-energyToEject);
-//		// reduce actual energy in pellet. a bit of waste to make it not 100% efficient
-//		energyToEject *= 0.5;
-//
-//		Corpse corpse = new Corpse(world, energyToEject, spawnAt);
-//		world.addEntity(corpse);
-//		// add ejection speed to corpse
-//		corpse.applyForce(this.relative_direction, getMass() * 10);
+		// if(wantsToEjectFood <= 2)
+		// return;
+		//
+		// double energyToEject = (getMass() * size) * wantsToEjectFood;
+		//
+		// Vector2 spawnAt = this.getLocation().add(new Vector2(this.relative_direction).multiply(size));
+		// if(!world.getBorders().contains(spawnAt.x, spawnAt.y)) {
+		// return;
+		// }
+		//
+		// energyToEject = Math.min(this.getEnergy(), energyToEject); // cant eject more than remaining energy
+		//
+		// // dont allow too small ejections. thousands of 1 energy dots sounds lame
+		// if(energyToEject < 5000) {
+		// return;
+		// }
+		//
+		// this.addEnergy(-energyToEject);
+		// // reduce actual energy in pellet. a bit of waste to make it not 100% efficient
+		// energyToEject *= 0.5;
+		//
+		// Corpse corpse = new Corpse(world, energyToEject, spawnAt);
+		// world.addEntity(corpse);
+		// // add ejection speed to corpse
+		// corpse.applyForce(this.relative_direction, getMass() * 10);
 	}
 
 	private double lastShadowValue;
@@ -611,7 +641,7 @@ public class AgentLife extends Agent {
 		double gain = 50 * intensity;
 		gain *= competition;
 		// gain *= world.getSkillFactor();
-		
+
 		if(isSelected())
 			getAge();
 
@@ -619,7 +649,7 @@ public class AgentLife extends Agent {
 		addEnergy(gain);
 		chemGained += gain;
 		this.lastChemicalExposure = (float) getChemsReceived();
-		
+
 	}
 
 	private double getLightReceived() {
@@ -633,13 +663,13 @@ public class AgentLife extends Agent {
 			loc = loc.add(seg.getPosition().add(structure.getCoreOffset()).add(0.5, 0.5).multiply(Agent.getSizeOfSegment())); // get structure spot
 			loc = loc.rotate(hitbox.getOrigin(), hitbox.getCurrentTheta()); // rotate it into position
 
-			float lightNormals = getSurfaceAreaForSegment(seg, new Vector2(0, -1));
+			float surface = (float) (getSurfaceAreaForSegment(seg, new Vector2(0, -1)) * seg.getDevelopment());
 			float sunlight = (float) (world.getShadowsAt(loc) * world.getLightAt(loc));
 
 			// if(isSelected())
 			// System.out.println(lightNormals);
 
-			totalLight += lightNormals * sunlight;
+			totalLight += surface * sunlight;
 		}
 
 		return totalLight;
@@ -656,13 +686,13 @@ public class AgentLife extends Agent {
 			loc = loc.add(seg.getPosition().add(structure.getCoreOffset()).add(0.5, 0.5).multiply(Agent.getSizeOfSegment())); // get structure spot
 			loc = loc.rotate(hitbox.getOrigin(), hitbox.getCurrentTheta()); // rotate it into position
 
-			float normals = getSurfaceAreaForSegment(seg, new Vector2(0, 1));
+			float surface = (float) (getSurfaceAreaForSegment(seg, new Vector2(0, 1)) * seg.getDevelopment());
 			float chems = (float) (world.getChemicalAt(loc));
 
 			// if(isSelected())
 			// System.out.println(lightNormals);
 
-			totalLight += normals * chems;
+			totalLight += surface * chems;
 		}
 
 		return totalLight;
@@ -685,13 +715,13 @@ public class AgentLife extends Agent {
 				0.2 * geneMultiplier); // activation value change
 		brain.getPhenotype().mutate(0.15 * geneMultiplier);
 
-		this.bodyDNA = mutateBodyDNA(this.bodyDNA, 
+		this.bodyDNA = mutateBodyDNA(this.bodyDNA,
 				0.01 * geneMultiplier, // node type chance
 				0.02 * geneMultiplier, // direction add chance
-				0.03 * geneMultiplier, //  direction del
+				0.03 * geneMultiplier, // direction del
 				0.01 * geneMultiplier, // node copy
 				0.02 * geneMultiplier, // node delete
-				0.01 * geneMultiplier); // angle 
+				0.01 * geneMultiplier); // angle
 
 		// if(random.nextDouble() < rate)
 		// brain.mutateNeuronsLimited(1, 1, 3, 0, 0, 0, 0);

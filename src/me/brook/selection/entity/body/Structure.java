@@ -1,6 +1,7 @@
 package me.brook.selection.entity.body;
 
 import java.awt.geom.Rectangle2D;
+import java.awt.geom.RectangularShape;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -28,6 +29,31 @@ public class Structure implements Serializable {
 		bytype = new HashMap<>();
 		build();
 	}
+	
+	public double getDevelopmentOfCell(int i) {
+		return getDevelopmentOfCell(structure.get(i));
+	}
+
+	public double getDevelopmentOfCell(Segment segment) {
+		return segment.getDevelopment();
+	}
+	
+	public void setDevelopmentOfCell(int i, double value) {
+		setDevelopmentOfCell(structure.get(i), value);
+	}
+
+	public void setDevelopmentOfCell(Segment segment, double value) {
+		segment.setDevelopment(value);
+	}
+	
+	public double getSumDevelopmentOfGrownCells() {
+		double sum = 0;
+		
+		for(Segment seg : structure)
+			sum += seg.getDevelopment();
+		
+		return sum;
+	}
 
 	public List<Segment> getStructure() {
 		return structure;
@@ -41,11 +67,10 @@ public class Structure implements Serializable {
 
 		HashSet<Vector2> used = new HashSet<>();
 
-		this.coreOffset = new Vector2(0, 0);
 		for(String chromo : chromosomes) {
 
 			if(chromo.equals(CORE)) {
-				used.add(this.coreOffset);
+				used.add(new Vector2());
 				structure.add(new Segment(CORE, new Vector2(), 0, 0));
 				continue;
 			}
@@ -125,29 +150,13 @@ public class Structure implements Serializable {
 
 				List<Segment> neighborsOf = new ArrayList<>();
 				getNeighborsOf(neighborsOf, segment);
-				this.structure = neighborsOf;
+				this.structure = neighborsOf; // also arranges shape into pattern moving away from body
 
 				break;
 			}
 
 		}
 
-		float minX = 0, minY = 0, maxX = 0, maxY = 0;
-		for(Segment segment : structure) {
-			Vector2 directions = segment.getPosition();
-			if(minX > directions.x) {
-				minX = directions.x;
-			}
-			else if(maxX < directions.x) {
-				maxX = directions.x;
-			}
-			if(minY > directions.y) {
-				minY = directions.y;
-			}
-			else if(maxY < directions.y) {
-				maxY = directions.y;
-			}
-		}
 
 		bytype.clear();
 		for(Segment seg : structure) {
@@ -156,12 +165,7 @@ public class Structure implements Serializable {
 			bytype.put(seg.getType(), list);
 		}
 
-		float w = (maxX - minX) + 1;
-		float h = (maxY - minY) + 1;
-		this.coreOffset = new Vector2(-minX, -minY);
-		Rectangle2D bounds = new Rectangle2D.Double(minX, minY, w, h);
-
-		this.bounds = bounds;
+		recalculateBounds();
 	}
 
 	public Segment getByPosition(Vector2 position) {
@@ -263,6 +267,79 @@ public class Structure implements Serializable {
 		if(!dna.equals(other.dna))
 			return false;
 		return true;
+	}
+
+	public void recalculateBounds() {
+		float minX = 0, minY = 0, maxX = 0, maxY = 0;
+		for(Segment segment : structure) {
+			if(segment.getDevelopment() == 0)
+				continue;
+			
+			Vector2 directions = segment.getPosition();
+			if(minX > directions.x) {
+				minX = directions.x;
+			}
+			else if(maxX < directions.x) {
+				maxX = directions.x;
+			}
+			if(minY > directions.y) {
+				minY = directions.y;
+			}
+			else if(maxY < directions.y) {
+				maxY = directions.y;
+			}
+		}
+
+		float w = (maxX - minX) + 1;
+		float h = (maxY - minY) + 1;
+		this.coreOffset = new Vector2(-minX, -minY);
+		this.bounds = new Rectangle2D.Double(minX, minY, w, h);
+	}
+
+	public Rectangle2D.Double getMaxBounds() {
+		float minX = 0, minY = 0, maxX = 0, maxY = 0;
+		for(Segment segment : structure) {
+			
+			Vector2 directions = segment.getPosition();
+			if(minX > directions.x) {
+				minX = directions.x;
+			}
+			else if(maxX < directions.x) {
+				maxX = directions.x;
+			}
+			if(minY > directions.y) {
+				minY = directions.y;
+			}
+			else if(maxY < directions.y) {
+				maxY = directions.y;
+			}
+		}
+
+		float w = (maxX - minX) + 1;
+		float h = (maxY - minY) + 1;
+		return new Rectangle2D.Double(minX, minY, w, h);
+	}
+
+	public Vector2 getMaxCoreOffset() {
+		float minX = 0, minY = 0, maxX = 0, maxY = 0;
+		for(Segment segment : structure) {
+			
+			Vector2 directions = segment.getPosition();
+			if(minX > directions.x) {
+				minX = directions.x;
+			}
+			else if(maxX < directions.x) {
+				maxX = directions.x;
+			}
+			if(minY > directions.y) {
+				minY = directions.y;
+			}
+			else if(maxY < directions.y) {
+				maxY = directions.y;
+			}
+		}
+
+		return new Vector2(-minX, -minY);
 	}
 	
 }

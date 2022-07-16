@@ -15,6 +15,7 @@ public class Segment implements Serializable {
 	private double value;
 	private double strength;
 	private boolean[] exposedFaces;
+	private double development;
 
 	public Segment(String type, Vector2 position, double value, double strength) {
 		this.type = type;
@@ -22,6 +23,14 @@ public class Segment implements Serializable {
 		this.value = value;
 		this.strength = strength;
 		exposedFaces = new boolean[4];
+	}
+	
+	public void setDevelopment(double development) {
+		this.development = development;
+	}
+	
+	public double getDevelopment() {
+		return development;
 	}
 
 	public String getType() {

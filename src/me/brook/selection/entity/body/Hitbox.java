@@ -157,10 +157,13 @@ public class Hitbox extends Area implements Serializable {
 			p.addPoint((int) vector2.x, (int) vector2.y);
 		}
 		
-		CellInfo[] myCells = new CellInfo[this.structure.getStructure().size()];
+		CellInfo[] myCells = new CellInfo[(int) this.structure.getStructure().size()];
 
 		int index = 0;
 		for(Segment seg : structure.getStructure()) {
+			if(seg.getDevelopment() == 0)
+				continue;
+			
 			// get light received at location of each cell
 			Vector2 loc = this.getRotatedLow(new Vector2(), 0); // get bottom left of structure
 			loc = loc.add(seg.getPosition().add(structure.getCoreOffset()).add(0.5, 0.5).multiply(Agent.getSizeOfSegment())); // get structure spot
@@ -168,7 +171,9 @@ public class Hitbox extends Area implements Serializable {
 
 			myCells[index++] = new CellInfo(loc, seg);
 		}
-		this.cells = myCells;
+		
+		this.cells = new CellInfo[index];
+		System.arraycopy(myCells, 0, this.cells, 0, index); // copy array adjusted to size	
 
 		return true;
 	}

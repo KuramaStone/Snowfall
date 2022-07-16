@@ -258,7 +258,7 @@ public class World {
 		lastLivingPopulation = calculateLivingPopulation();
 
 		// make sure to save after threads are guaranteed to be finished
-		if(this.ticksSinceRestart != 0 && this.ticksSinceRestart % 5000 == 0 && this.ticksSinceRestart != startTimeFromSave) {
+		if(this.ticksSinceRestart != 0 && this.ticksSinceRestart % 25000 == 0 && this.ticksSinceRestart != startTimeFromSave) {
 			save(true);
 		}
 
@@ -733,7 +733,7 @@ public class World {
 		return borders;
 	}
 
-//	public static FSTConfiguration fstConf = FSTConfiguration.createDefaultConfiguration();
+	// public static FSTConfiguration fstConf = FSTConfiguration.createDefaultConfiguration();
 
 	public void save(boolean autosave) {
 
@@ -805,7 +805,7 @@ public class World {
 				index++;
 			}
 
-//			boolean running = true;
+			// boolean running = true;
 			// while(running) {
 			// getAngleOfSun();
 
@@ -820,29 +820,28 @@ public class World {
 				FileOutputStream fos = new FileOutputStream(new File(sub, "world.json"));
 				ObjectOutputStream oos = new ObjectOutputStream(fos);
 				oos.writeObject(worldSave);
-				
+
 				oos.close();
 				fos.close();
 				fos = null;
 				oos = null;
 
 				// check that data is readable
-//				try {
-//					HashMap<String, Object> test = (HashMap<String, Object>) fstConf.asObject(data);
-//					if(test != null && test.get("uwu").equals("owo")) {
-//						System.out.println("Byte array could be read.");
-//						System.out.println(test.toString());
-//					}
-//					else {
-//						System.err.println("Byte array could NOT be read.");
-//						System.err.println(test);
-//					}
-//					getAngleOfSun();
-//				}
-//				catch(Exception e) {
-//					e.printStackTrace();
-//				}
-
+				// try {
+				// HashMap<String, Object> test = (HashMap<String, Object>) fstConf.asObject(data);
+				// if(test != null && test.get("uwu").equals("owo")) {
+				// System.out.println("Byte array could be read.");
+				// System.out.println(test.toString());
+				// }
+				// else {
+				// System.err.println("Byte array could NOT be read.");
+				// System.err.println(test);
+				// }
+				// getAngleOfSun();
+				// }
+				// catch(Exception e) {
+				// e.printStackTrace();
+				// }
 
 				FSTConfiguration.clearGlobalCaches();
 			}
@@ -895,7 +894,7 @@ public class World {
 			try {
 				FileInputStream fis = new FileInputStream(new File(parent, "world.json"));
 				ObjectInputStream ois = new ObjectInputStream(fis);
-				
+
 				Object ob = ois.readObject();
 
 				ois.close();
@@ -1197,6 +1196,12 @@ public class World {
 
 	private List<Agent> toBuild = new ArrayList<>();
 
+	public void rerenderAgent(Agent agent) {
+		if(toBuild.contains(agent))
+			toBuild.remove(agent); // to stop repeated entries
+		toBuild.add(agent);
+	}
+
 	public void addEntity(Entity entity) {
 		if(isMultithreading()) {
 			scheduleAdditions.add(entity);
@@ -1223,7 +1228,7 @@ public class World {
 		}
 	}
 
-	private boolean isMultithreading() {
+	public boolean isMultithreading() {
 		return Thread.currentThread().getId() != engine.getCurrentThreadID();
 	}
 

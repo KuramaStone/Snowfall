@@ -7,6 +7,7 @@ import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -48,6 +49,7 @@ import me.brook.neat.network.GConnection;
 import me.brook.neat.network.NeatNetwork;
 import me.brook.neat.network.NeatNeuron;
 import me.brook.neat.network.Phenotype.Pheno;
+import me.brook.selection.LibDisplay.AgentTextureStage;
 import me.brook.selection.entity.Agent;
 import me.brook.selection.entity.Entity;
 import me.brook.selection.entity.body.Hitbox;
@@ -91,8 +93,8 @@ public class LibDisplay {
 	public Pixmap shadowPixmap;
 	public FrameBuffer shadowBuffer;
 
-	private Map<String, List<Agent>> usedTextures;
-	private Map<String, Sprite> texturesByDna;
+	private Map<AgentTextureStage, HashSet<Agent>> usedTextures;
+	private Map<AgentTextureStage, Sprite> texturesByDna;
 
 	public RenderingMode prevMode;
 	private byte[] shadowByteArray;
@@ -223,15 +225,27 @@ public class LibDisplay {
 
 		try {
 			List<Agent> toBuild = engine.getWorld().getToBuild();
+			
+			int amount = 25;
 
 			for(int i = 0; i < toBuild.size(); i++) {
 				Agent a = toBuild.remove(i);
-
+				
 				if(a == null || !a.isAlive()) {
 					continue;
 				}
+				
+				if(a.textureStatus != null) { // already built, remove
+//					removeAgent(a);
+				}
+				
 				buildBodyFor(a);
 				i--;
+				
+				amount--;
+
+				if(amount == 0)
+					break;
 			}
 		}
 		catch(Exception e) {
@@ -342,7 +356,7 @@ public class LibDisplay {
 					polyRegion = agent.getComputedShadowRegion();
 					if(polyRegion == null)
 						continue;
-					
+
 					float[] vertices = polyRegion.getVertices();
 
 					for(int j = 0; j < vertices.length;) {
@@ -1072,20 +1086,20 @@ public class LibDisplay {
 		if(!agent.isAlive())
 			return;
 
-		if(texturesByDna.containsKey(agent.getGeneDNA())) {
-			agent.setBodySprite(texturesByDna.get(agent.getGeneDNA()));
-			List<Agent> list = usedTextures.get(agent.getGeneDNA());
-			if(list == null)
-				usedTextures.put(agent.getGeneDNA(), list = new ArrayList<>());
-			list.add(agent);
-			agent.textureStatus = "linked";
-			return;
-		}
+//		AgentTextureStage ats = new AgentTextureStage(agent.getGeneDNA(), agent.getGrowthStage());
+//		if(texturesByDna.containsKey(ats)) {
+//			agent.setBodySprite(texturesByDna.get(ats));
+//			HashSet<Agent> list = usedTextures.get(ats);
+//			list.add(agent);
+//			agent.textureStatus = "linked";
+//			return;
+//		}
 
-		Structure structure = agent.getStructure();
+		Structure structure1 = agent.getStructure();
 
-		float segWidth = (float) structure.getBounds().getWidth();
-		float segHeight = (float) structure.getBounds().getHeight();
+		Rectangle2D maxBounds = structure1.getMaxBounds();
+		float segWidth = (float) maxBounds.getWidth();
+		float segHeight = (float) maxBounds.getHeight();
 
 		int segmentSize = getSegmentSpriteSize() * 4;
 		int width = (int) (segmentSize * segWidth);
@@ -1105,42 +1119,48 @@ public class LibDisplay {
 		batch.setShader(structureShader);
 		batch.begin();
 		structureShader.bind();
-		List<Segment> segments = structure.getStructure();
+		List<Segment> segments = structure1.getStructure();
 
-		float w = (float) (structure.getBounds().getWidth());
-		float h = (float) (structure.getBounds().getHeight());
+		float w = (float) (maxBounds.getWidth());
+		float h = (float) (maxBounds.getHeight());
 
-		Vector2 offset = structure.getCoreOffset();
+		Vector2 offset = structure1.getMaxCoreOffset();
 
+		int index = 0;
 		for(int i = 0; i < Math.min(50, segments.size()); i++) { // maximum of 50 segments to render, 400 floats total
 			Segment seg = segments.get(i);
-			int a = i * 6 + 0;
-			int b = i * 6 + 1;
-			int c = i * 6 + 2;
-			int d = i * 6 + 3;
-			int e = i * 6 + 4;
-			int f = i * 6 + 5;
+			if(seg.getDevelopment() == 0)
+				continue;
+
+			int a = index * 6 + 0;
+			int b = index * 6 + 1;
+			int c = index * 6 + 2;
+			int d = index * 6 + 3;
+			int e = index * 6 + 4;
+			int f = index * 6 + 5;
 			Color color = getColorFromType(seg.getType());
 
-			long seed = agent.getUUID().getMostSignificantBits();
+			long seed = agent.getGeneDNA().hashCode();
 			random.setSeed(seed);
 			// Vector2 id = new Vector2(random.nextDouble() - 0.5, random.nextDouble() - 0.5);
 			Vector2 id = new Vector2();
 
 			structureShader.setUniformf("positions[" + a + "]", (0.5f + seg.getPosition().x + offset.x + id.x) / (w) - 0.5f);
 			structureShader.setUniformf("positions[" + b + "]", (0.5f + seg.getPosition().y + offset.y + id.y) / (h) - 0.5f);
-			structureShader.setUniformf("positions[" + c + "]", (float) seg.getStrengthValue());
+			structureShader.setUniformf("positions[" + c + "]", (float) (seg.getStrengthValue() * seg.getDevelopment()));
 			structureShader.setUniformf("positions[" + d + "]", color.r);
 			structureShader.setUniformf("positions[" + e + "]", color.g);
 			structureShader.setUniformf("positions[" + f + "]", color.b);
+
+			index++;
 		}
 		structureShader.setUniformi("totalPos", segments.size());
 		structureShader.setUniformf("hue", agent.getHue());
 		structureShader.setUniformf("width", width);
 		structureShader.setUniformf("height", height);
 		structureShader.setUniformf("id", (float) (Math.random() * 10000));
-		structureShader.setUniformf("segmentWidth", (int) structure.getBounds().getWidth());
-		structureShader.setUniformf("segmentHeight", (int) structure.getBounds().getHeight());
+		structureShader.setUniformf("segmentWidth", (int) maxBounds.getWidth());
+		structureShader.setUniformf("segmentHeight", (int) maxBounds.getHeight());
 
 		// the shader does all the work
 		batch.draw(agentSprite, 0, 0, width, height);
@@ -1160,12 +1180,52 @@ public class LibDisplay {
 		agent.setBodySprite(sprite);
 		pixmap.dispose();
 
-		List<Agent> list = new ArrayList<>();
-		list.add(agent);
+//		HashSet<Agent> list = new HashSet<>();
+//		list.add(agent);
 
 		agent.textureStatus = "generated";
-		texturesByDna.put(agent.getGeneDNA(), sprite);
-		usedTextures.put(agent.getGeneDNA(), list);
+//		texturesByDna.put(ats, sprite);
+//		usedTextures.put(ats, list);
+	}
+
+	public static class AgentTextureStage {
+		public String dna;
+		public int growthStage; // stage of growth
+
+		public AgentTextureStage(String dna, int growthStage) {
+			this.dna = dna;
+			this.growthStage = growthStage;
+		}
+
+		@Override
+		public int hashCode() {
+			final int prime = 31;
+			int result = 1;
+			result = prime * result + ((dna == null) ? 0 : dna.hashCode());
+			result = prime * result + growthStage;
+			return result;
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			if(this == obj)
+				return true;
+			if(obj == null)
+				return false;
+			if(getClass() != obj.getClass())
+				return false;
+			AgentTextureStage other = (AgentTextureStage) obj;
+			if(dna == null) {
+				if(other.dna != null)
+					return false;
+			}
+			else if(!dna.equals(other.dna))
+				return false;
+			if(growthStage != other.growthStage)
+				return false;
+			return true;
+		}
+
 	}
 
 	private Color getColorFromType(String type) {
@@ -1188,28 +1248,42 @@ public class LibDisplay {
 		return null;
 	}
 
-	public Map<String, List<Agent>> getUsedTextures() {
+	public Map<AgentTextureStage, HashSet<Agent>> getUsedTextures() {
 		return usedTextures;
 	}
 
-	public void removeTexture(String geneDNA) {
-		if(this.texturesByDna.containsKey(geneDNA)) {
-			this.texturesByDna.remove(geneDNA).getTexture().dispose();
+	public void removeTexture(AgentTextureStage ats) {
+		if(this.texturesByDna.containsKey(ats)) {
+			this.texturesByDna.remove(ats).getTexture().dispose();
 		}
 	}
 
 	public void removeAgent(Agent a) {
-		List<Agent> list = usedTextures.get(a.getGeneDNA());
-		if(list != null) {
-			list.remove(a);
-			if(list.isEmpty()) {
-				removeTexture(a.getGeneDNA());
-				usedTextures.remove(a.getGeneDNA());
+		AgentTextureStage toRemove = null;
+		for(AgentTextureStage ats : usedTextures.keySet()) {
+			HashSet<Agent> set = usedTextures.get(ats);
+
+			if(set.contains(a)) {
+				toRemove = ats;
+				break;
 			}
 		}
+		
+		if(toRemove != null) {
+			HashSet<Agent> set = usedTextures.get(toRemove);
+			set.remove(a);
+			a.textureStatus = null;
+
+			if(set.isEmpty()) {
+				usedTextures.remove(toRemove);
+				texturesByDna.remove(toRemove);
+			}
+			
+		}
+		
 	}
 
-	public Map<String, Sprite> getTexturesByDna() {
+	public Map<AgentTextureStage, Sprite> getTexturesByDna() {
 		return texturesByDna;
 	}
 
@@ -1223,9 +1297,9 @@ public class LibDisplay {
 		// }
 		// System.out.println("==== HEAP ====");
 
-		for(String str : this.usedTextures.keySet()) {
-			if(this.usedTextures.get(str).isEmpty()) {
-				this.texturesByDna.get(str).getTexture().dispose();
+		for(AgentTextureStage ats : this.usedTextures.keySet()) {
+			if(this.usedTextures.get(ats).isEmpty()) {
+				this.texturesByDna.get(ats).getTexture().dispose();
 			}
 		}
 	}

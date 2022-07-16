@@ -84,7 +84,6 @@ public abstract class Entity implements QuadSortable, Comparable<Entity> {
 		if(alive) {
 			moveWithCurrent();
 			move();
-			// dyn4j();
 
 			age++;
 		}
@@ -357,7 +356,7 @@ public abstract class Entity implements QuadSortable, Comparable<Entity> {
 		double currentForce = 1 * getSurfaceArea((float) currentTheta);
 
 		if(this.isAgent())
-			this.applyForce(currentTheta, currentForce * 0.03);
+			this.applyForce(currentTheta, currentForce * 0.0);
 		else
 			this.applyForce(currentTheta, currentForce * 50);
 	}
@@ -454,6 +453,7 @@ public abstract class Entity implements QuadSortable, Comparable<Entity> {
 			double bodyEnergy = (double) state.map.get("bodyEnergy");
 			String bodyGene = (String) state.map.get("bodyGene");
 			double health = (double) state.map.get("health");
+			double[] strucDevelopment = (double[]) state.map.get("strucDevelopment");
 
 			AgentLife life = new AgentLife(world, null, null, 0, 0, new Vector2(), false);
 			life.setRelativeDirection(rotation);
@@ -463,6 +463,7 @@ public abstract class Entity implements QuadSortable, Comparable<Entity> {
 			life.setBodyMaintainanceEnergy(bodyEnergy);
 			life.setBodyGene(bodyGene);
 			life.setHealth(health);
+			life.setLoadedStructureDevelopment(strucDevelopment);
 
 			entity = life;
 		}
