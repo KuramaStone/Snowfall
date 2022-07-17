@@ -12,6 +12,7 @@ import me.brook.neat.network.NeatNetwork.NeatTransferFunction;
 import me.brook.neat.network.Phenotype;
 import me.brook.neat.randomizer.AsexualReproductionRandomizer;
 import me.brook.neat.species.Species;
+import me.brook.selection.LibDisplay.RenderingMode;
 import me.brook.selection.World;
 import me.brook.selection.entity.body.Hitbox.CellCollisionInfo;
 import me.brook.selection.entity.body.Segment;
@@ -25,7 +26,7 @@ public class AgentLife extends Agent {
 
 	private static final int entitiesToTrack = 1;
 	// sunlight, hue, relative x, relative y, energy, speed, nearby count, to light
-	public static final int totalInputs = 12 + 6 * entitiesToTrack, outputs = 10;
+	public static final int totalInputs = 12 + 6 * entitiesToTrack, outputs = 11;
 
 	public AgentLife(World world, Species<Agent> parentSpecies, Color color, double speed, double size, Vector2 location, boolean makeBrain) {
 		super(world, parentSpecies, color, speed, size, location, true);
@@ -79,14 +80,58 @@ public class AgentLife extends Agent {
 	}
 
 	protected void grow() {
-		if(maturity > 1)
+		if(structure.getSumDevelopmentOfGrownCells() >= structure.getStructure().size())
+			return;
+		if(wantsToGrow <= 0)
 			return;
 
+		// structure will reach full development at maturity=1 if wantsToGrow is at 1 every update
 		// structures to grow per tick
-		double growthRate = (structure.getStructure().size() - 1) / (calculateMaxAge() / 2);
+		double growthRate = (structure.getStructure().size() - 1.0) / (calculateMaxAge() / 2.0); // age at which maturity equals 1
+		growthRate = Math.min(1, growthRate * wantsToGrow * currentMetabolism);
+		
+
+		double energyToGrow = growthRate * (getSizeOfSegment() * getSizeOfSegment()) * 1;
+		
+		if(this.energy < energyToGrow) {
+			return;
+		}
+		
+		addEnergy(-energyToGrow);
 
 		int maxCells = structure.getStructure().size();
 		boolean passedNewRenderMark = false;
+		
+		double frenquency = 0.5f;
+		if(world.getEngine().getRenderingMode() == RenderingMode.ENTITIES) {
+			if(world.getEngine().getDisplay().isLocationVisibleOnScreen(this.location)) {
+				// increase frequency with zoom
+				double longestSide = Math.max(structure.getBounds().getWidth(), structure.getBounds().getHeight()) * Agent.getSizeOfSegment();
+				double percentageofScreenWidth = longestSide / (world.getEngine().getDisplay().getImageWidth() * world.getEngine().getZoom());
+				
+				if(percentageofScreenWidth < 0.01) { // if less than 1% of screen, rarely update
+					frenquency = 1;
+				}
+				else if(percentageofScreenWidth < 0.05) { // if between 1 and 10%, update slightly more
+					frenquency = 0.33;
+				}
+				else if(percentageofScreenWidth < 0.1) { // if between 10 and 15%, update slightly more
+					frenquency = 0.33;
+				}
+				else { // if bigger than 15%, update frequently
+					frenquency = 0.05;
+				}
+				
+				
+			}
+			else {
+				frenquency = 0;
+			}
+		}
+		
+//		if(isSelected())
+//			System.out.println(frenquency);
+		
 		for(int i = 1; i < maxCells; i++) {
 			Segment seg = structure.getStructure().get(i);
 			if(seg.getDevelopment() == 1)
@@ -95,8 +140,8 @@ public class AgentLife extends Agent {
 			double stage = seg.getDevelopment();
 			double newStage = Math.min(1, stage + growthRate);
 
-			int id1 = (int) (stage / 0.1);
-			int id2 = (int) (newStage / 0.1);
+			int id1 = (int) (stage / frenquency);
+			int id2 = (int) (newStage / frenquency);
 			// if the id has increased, then it is at a new stage of growth and we can rerender
 			// if it was zero, then we need to render the baby cell
 			if(id2 > id1 || stage == 0 || newStage == 1) {
@@ -106,11 +151,16 @@ public class AgentLife extends Agent {
 			seg.setDevelopment(newStage);
 			break; // only grow first cell
 		}
+		
+		
+
+		developmentLevel = structure.getSumDevelopmentOfGrownCells() / structure.getStructure().size();
 
 		structure.recalculateBounds();
 		if(passedNewRenderMark)
 			world.rerenderAgent(this);
 		this.hitbox = buildHitbox(this.location, (float) this.relative_direction);
+		sight_range = (float) (4 * getSizeOfSegment() * Math.max(structure.getBounds().getWidth(), structure.getBounds().getHeight()));
 	}
 
 	@Override
@@ -203,7 +253,7 @@ public class AgentLife extends Agent {
 
 								attackingAttackerMod = ((double) myCellCount) / (myCellCount + preyCellCount);
 							}
-							double damage = 1 * mass * myCellCount * sizeMod * attackingAttackerMod;
+							double damage = 1 * mass * myCellCount * sizeMod * attackingAttackerMod * currentMetabolism;
 
 							if(damage == 0) {
 								continue;
@@ -247,7 +297,7 @@ public class AgentLife extends Agent {
 
 						if(attack) {
 
-							double damage = getTotalMass() * 0.25;
+							double damage = getTotalMass() * 0.25 * currentMetabolism;
 							damage *= 10; // increase eating of corpses since they're dead
 							// size modifier
 							damage *= this.structure.getByType(Structure.HUNT).size();
@@ -292,8 +342,9 @@ public class AgentLife extends Agent {
 		brain.setWeightOf(brain.getLayers().get(0).get(totalInputs).getNeuronID(), brain.getLayers().get(1).get(7).getNeuronID(), 1); // bias to attack
 		brain.setWeightOf(brain.getLayers().get(0).get(totalInputs).getNeuronID(), brain.getLayers().get(1).get(9).getNeuronID(), 1); // bias to digest
 		brain.setWeightOf(brain.getLayers().get(0).get(totalInputs).getNeuronID(), brain.getLayers().get(1).get(3).getNeuronID(), 1); // bias to fuck
+		brain.setWeightOf(brain.getLayers().get(0).get(totalInputs).getNeuronID(), brain.getLayers().get(1).get(10).getNeuronID(), 3); // bias to grow
 
-		brain.labelOutputs("rotate", "forceX", "forceY", "dtf", "light", "chemo", "heal", "attack", "hold", "digest");
+		brain.labelOutputs("rotate", "forceX", "forceY", "dtf", "light", "chemo", "heal", "attack", "hold", "digest", "grow");
 
 		String[] entityLabels = new String[] { "r", "g", "b", "dist", "rot", "f value" };
 		String[] inputs = new String[totalInputs];
@@ -606,15 +657,15 @@ public class AgentLife extends Agent {
 		int nearbySize = 0;
 		for(NearbyEntry ne : lastNearbyEntities)
 			if(ne.getKey().isAgent() && ne.getKey().getLocation().distanceToSq(this.location) < sight_range &&
-					((Agent) ne.getKey()).wantsToPhotosynthesize)
+					((Agent) ne.getKey()).wantsToPhotosynthesize && ((Agent) ne.getKey()).getStructure().hasDevelopedCellsOf(Structure.PHOTO))
 				nearbySize++;
 
 		// double competition = Math.max(0, Math.min(1, (size - entitiesBlockingLightFactor) / size));
 		double intensity = getLightReceived();
-		double competition = Math.max(0, Math.min(1, (1.0 / (1 + Math.pow(nearbySize, 1))))); // nearby agents reduce light for this agent
+		double competition = Math.max(0, Math.min(1, (1.0 / (1 + Math.pow(nearbySize, 2))))); // nearby agents reduce light for this agent
 		this.lastLightExposure = (float) intensity;
 
-		double gain = 100 * intensity;
+		double gain = 100 * intensity * currentMetabolism;
 		gain *= competition;
 		// gain *= world.getSkillFactor();
 
@@ -633,12 +684,12 @@ public class AgentLife extends Agent {
 		int nearbySize = 0;
 		for(NearbyEntry ne : lastNearbyEntities)
 			if(ne.getKey().isAgent() && ne.getKey().getLocation().distanceToSq(this.location) < sight_range &&
-					((Agent) ne.getKey()).wantsToChemosynthesize)
+					((Agent) ne.getKey()).wantsToChemosynthesize && ((Agent) ne.getKey()).getStructure().hasDevelopedCellsOf(Structure.CHEMO))
 				nearbySize++;
 		double competition = Math.max(0, Math.min(1, (1.0 / (1 + Math.pow(nearbySize, 2))))); // nearby agents reduce light for this agent
 		double intensity = getChemsReceived();
 
-		double gain = 50 * intensity;
+		double gain = 50 * intensity * currentMetabolism;
 		gain *= competition;
 		// gain *= world.getSkillFactor();
 
@@ -721,7 +772,8 @@ public class AgentLife extends Agent {
 				0.03 * geneMultiplier, // direction del
 				0.01 * geneMultiplier, // node copy
 				0.02 * geneMultiplier, // node delete
-				0.01 * geneMultiplier); // angle
+				0.01 * geneMultiplier, // angle
+				0.05 * geneMultiplier); // swap chance
 
 		// if(random.nextDouble() < rate)
 		// brain.mutateNeuronsLimited(1, 1, 3, 0, 0, 0, 0);

@@ -187,6 +187,7 @@ void main() {
 
 	vec4 colorArray[100];
 	float heatArray[100];
+	int index = 0;
 
 	for (int i = 0; i < totalPos; i++) { // maximum of 100 segments to render, 400 floats total
 		float x = (positions[i * 6 + 0] + 0.5) * width;
@@ -212,8 +213,9 @@ void main() {
 		}
 		totalHeat += heat / (1 + dist * dist);
 
-		colorArray[i] = color;
-		heatArray[i] = heat / (1 + dist * dist);
+		colorArray[index] = color;
+		heatArray[index] = heat / (1 + dist * dist);
+		index++;
 	}
 
 	vec4 finalColor = vec4(0);

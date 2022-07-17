@@ -231,11 +231,6 @@ public class EntityScreen extends DisplayScreen {
 		Vector2 location = entity.getLocation();
 
 		// check if on screen
-		Vector3 projected = worldCamera.project(new Vector3(location.x, location.y, 0));
-		if(projected.x < -(2 * Agent.getSizeOfSegment()) || projected.y < -(2 * Agent.getSizeOfSegment()) ||
-				projected.x > worldCamera.viewportWidth + (2 * Agent.getSizeOfSegment()) ||
-				projected.y > worldCamera.viewportHeight + (2 * Agent.getSizeOfSegment()))
-			return;
 
 		if(entity.isAgent()) {
 			Agent agent = (Agent) entity;

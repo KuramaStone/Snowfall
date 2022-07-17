@@ -228,7 +228,7 @@ public class World {
 		agent.getBrain().getPhenotype().addPhenotype("child_portion", new Pheno(0.7, 0.2, 0.1, 0.8));
 
 		agent.getBrain().getPhenotype().addPhenotype("hue", new Pheno(.05, 0.05, 0, 1, true));
-		agent.getBrain().getPhenotype().addPhenotype("metabolism", new Pheno(0.5, 0.1, 0.1, 1, false));
+		agent.getBrain().getPhenotype().addPhenotype("metabolism", new Pheno(0.5, 0.05, 0.2, 2, false));
 		agent.getBrain().getPhenotype().addPhenotype("density", new Pheno(1.5, 0.1, 1, 2, false));
 		agent.getBrain().getPhenotype().addPhenotype("speed", new Pheno(1.5, 0.1, 1, 10, false));
 
@@ -254,7 +254,7 @@ public class World {
 	public boolean update() throws InterruptedException {
 		if(updateResults != null && !areResultsReady())
 			return false;
-
+		
 		lastLivingPopulation = calculateLivingPopulation();
 
 		// make sure to save after threads are guaranteed to be finished
@@ -283,7 +283,7 @@ public class World {
 				System.err.println("toBuild array too full.");
 				for(int i = 0; i < toBuild.size(); i++) {
 					Agent a = toBuild.get(i);
-					if(a == null) {
+					if(a == null || toBuild.contains(a)) {
 						toBuild.remove(i);
 						i--;
 						continue;
@@ -700,9 +700,10 @@ public class World {
 		return entities.size();
 	}
 
-	private void configureAgent(Agent child, float position) {
-		child.reset();
-		child.init();
+	private void configureAgent(Agent agent, float position) {
+		agent.reset();
+		agent.init();
+//		agent.shuffleDNA(10);
 
 		if(!wasLoadedFromSave) {
 			double x = (int) (((random.nextDouble() * 2 - 1) * (worldWidth)));
@@ -713,7 +714,7 @@ public class World {
 				y = (int) (((random.nextDouble() * 2 - 1) * (worldHeight)));
 			}
 
-			child.setLocation(new Vector2(x, y));
+			agent.setLocation(new Vector2(x, y));
 		}
 	}
 
@@ -1275,7 +1276,7 @@ public class World {
 
 	public double getDaytimeLightFactor() {
 		// sun intensity is equal to cos the elevation angle. elevation angle is the angle from the horizon
-		return Math.max(0.25, Math.cos(angleOfSun - Math.PI / 2)); // minimum sun of 0
+		return Math.max(0.0, Math.cos(angleOfSun - Math.PI / 2)); // minimum sun of 0
 	}
 
 	public double getAngleOfSun() {

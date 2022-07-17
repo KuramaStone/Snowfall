@@ -341,5 +341,17 @@ public class Structure implements Serializable {
 
 		return new Vector2(-minX, -minY);
 	}
+
+	public boolean hasDevelopedCellsOf(String type) {
+		
+		for(Segment seg : structure) {
+			if(seg.getType().equals(type)) {
+				if(seg.getDevelopment() > 0)
+					return true;
+			}
+		}
+		
+		return false;
+	}
 	
 }

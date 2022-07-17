@@ -454,6 +454,7 @@ public abstract class Entity implements QuadSortable, Comparable<Entity> {
 			String bodyGene = (String) state.map.get("bodyGene");
 			double health = (double) state.map.get("health");
 			double[] strucDevelopment = (double[]) state.map.get("strucDevelopment");
+			double developmentLevel = (double) state.map.get("developmentLevel");
 
 			AgentLife life = new AgentLife(world, null, null, 0, 0, new Vector2(), false);
 			life.setRelativeDirection(rotation);
@@ -464,6 +465,7 @@ public abstract class Entity implements QuadSortable, Comparable<Entity> {
 			life.setBodyGene(bodyGene);
 			life.setHealth(health);
 			life.setLoadedStructureDevelopment(strucDevelopment);
+			life.setDevelopmentLevel(developmentLevel);
 
 			entity = life;
 		}

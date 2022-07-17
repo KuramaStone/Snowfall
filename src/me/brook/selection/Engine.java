@@ -173,7 +173,7 @@ public class Engine extends Game {
 //				world.getBorders().generatePolygonsFromMap();
 //			});
 			queue.add((Runnable) () -> {
-				libDisplay.buildAgents();
+				libDisplay.buildAllAgents();
 
 				Gdx.input.setInputProcessor(new InputDetector(this));
 				setRenderingMode(RenderingMode.ENTITIES);

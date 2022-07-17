@@ -221,27 +221,53 @@ public class LibDisplay {
 
 	}
 
+	public void buildAllAgents() {
+
+		try {
+			List<Agent> toBuild = engine.getWorld().getToBuild();
+
+			for(int i = 0; i < toBuild.size(); i++) {
+				Agent a = toBuild.remove(i);
+
+				if(a == null || !a.isAlive()) {
+					continue;
+				}
+
+				if(a.textureStatus != null) { // already built, remove
+					// removeAgent(a);
+				}
+
+				buildBodyFor(a);
+				i--;
+			}
+		}
+		catch(Exception e) {
+			e.printStackTrace();
+		}
+
+	}
+
 	public void buildAgents() {
 
 		try {
 			List<Agent> toBuild = engine.getWorld().getToBuild();
-			
+
 			int amount = 25;
 
 			for(int i = 0; i < toBuild.size(); i++) {
 				Agent a = toBuild.remove(i);
-				
+
 				if(a == null || !a.isAlive()) {
 					continue;
 				}
-				
+
 				if(a.textureStatus != null) { // already built, remove
-//					removeAgent(a);
+					// removeAgent(a);
 				}
-				
+
 				buildBodyFor(a);
 				i--;
-				
+
 				amount--;
 
 				if(amount == 0)
@@ -519,24 +545,26 @@ public class LibDisplay {
 							Color.GREEN,
 							Color.RED,
 							Color.WHITE,
-							Color.SALMON
+							Color.SALMON,
+							Color.SCARLET
 					};
 					shapes.setProjectionMatrix(staticCamera.combined);
 					shapes.begin(ShapeType.Filled);
 					int l = 0;
-					for(double out : agent.getLastOutputs()) {
-						shapes.setColor(colors[l]);
-						shapes.circle(x, y, size);
+					if(agent.getLastOutputs() != null)
+						for(double out : agent.getLastOutputs()) {
+							shapes.setColor(colors[l]);
+							shapes.circle(x, y, size);
 
-						float theta = (float) (Math.PI / 2);
-						float cos = (float) (Math.cos(theta) * size);
-						float sin = (float) (Math.sin(theta) * size);
-						shapes.setColor(Color.GRAY);
-						shapes.rectLine(x, y, x + cos, y + sin, 2);
-						x += size * 2 * 1.1;
+							float theta = (float) (Math.PI / 2);
+							float cos = (float) (Math.cos(theta) * size);
+							float sin = (float) (Math.sin(theta) * size);
+							shapes.setColor(Color.GRAY);
+							shapes.rectLine(x, y, x + cos, y + sin, 2);
+							x += size * 2 * 1.1;
 
-						l++;
-					}
+							l++;
+						}
 					shapes.end();
 					// now draw strings
 					x = startX;
@@ -566,6 +594,10 @@ public class LibDisplay {
 				shapes.rect(x, y, (float) (screenSize), h * 2);
 				shapes.setColor(Color.GREEN);
 				shapes.rect(x, y, (float) ((agent.getHealth() / agent.getMaxHealth()) * screenSize), h * 2);
+				shapes.setColor(Color.NAVY);
+				shapes.rect(x, y+h*2.2f, (float) (screenSize), h * 2);
+				shapes.setColor(Color.BLUE);
+				shapes.rect(x, y+h*2.2f, (float) ((agent.getStructure().getSumDevelopmentOfGrownCells() / agent.getStructure().getStructure().size()) * screenSize), h * 2);
 				shapes.end();
 
 				batch.begin();
@@ -573,6 +605,10 @@ public class LibDisplay {
 				GlyphLayout layout = new GlyphLayout();
 				layout.setText(font, dfdouble.format(agent.getHealth()) + " / " + dfdouble.format(agent.getMaxHealth()));
 				font.draw(batch, layout, x, y);
+				font.setColor(Color.WHITE);
+				layout = new GlyphLayout();
+				layout.setText(font, dfdouble.format(agent.getStructure().getSumDevelopmentOfGrownCells()) + " / " + agent.getStructure().getStructure().size());
+				font.draw(batch, layout, x, y+h*2.2f);
 				batch.end();
 
 				Hitbox box = agent.getHitbox();
@@ -1086,14 +1122,18 @@ public class LibDisplay {
 		if(!agent.isAlive())
 			return;
 
-//		AgentTextureStage ats = new AgentTextureStage(agent.getGeneDNA(), agent.getGrowthStage());
-//		if(texturesByDna.containsKey(ats)) {
-//			agent.setBodySprite(texturesByDna.get(ats));
-//			HashSet<Agent> list = usedTextures.get(ats);
-//			list.add(agent);
-//			agent.textureStatus = "linked";
-//			return;
-//		}
+		if(agent.getBodySprite() != null) {
+			agent.getBodySprite().getTexture().dispose();
+		}
+
+		// AgentTextureStage ats = new AgentTextureStage(agent.getGeneDNA(), agent.getGrowthStage());
+		// if(texturesByDna.containsKey(ats)) {
+		// agent.setBodySprite(texturesByDna.get(ats));
+		// HashSet<Agent> list = usedTextures.get(ats);
+		// list.add(agent);
+		// agent.textureStatus = "linked";
+		// return;
+		// }
 
 		Structure structure1 = agent.getStructure();
 
@@ -1180,12 +1220,12 @@ public class LibDisplay {
 		agent.setBodySprite(sprite);
 		pixmap.dispose();
 
-//		HashSet<Agent> list = new HashSet<>();
-//		list.add(agent);
+		// HashSet<Agent> list = new HashSet<>();
+		// list.add(agent);
 
 		agent.textureStatus = "generated";
-//		texturesByDna.put(ats, sprite);
-//		usedTextures.put(ats, list);
+		// texturesByDna.put(ats, sprite);
+		// usedTextures.put(ats, list);
 	}
 
 	public static class AgentTextureStage {
@@ -1259,28 +1299,28 @@ public class LibDisplay {
 	}
 
 	public void removeAgent(Agent a) {
-		AgentTextureStage toRemove = null;
-		for(AgentTextureStage ats : usedTextures.keySet()) {
-			HashSet<Agent> set = usedTextures.get(ats);
+		// AgentTextureStage toRemove = null;
+		// for(AgentTextureStage ats : usedTextures.keySet()) {
+		// HashSet<Agent> set = usedTextures.get(ats);
+		//
+		// if(set.contains(a)) {
+		// toRemove = ats;
+		// break;
+		// }
+		// }
+		//
+		// if(toRemove != null) {
+		// HashSet<Agent> set = usedTextures.get(toRemove);
+		// set.remove(a);
+		// a.textureStatus = null;
+		//
+		// if(set.isEmpty()) {
+		// usedTextures.remove(toRemove);
+		// texturesByDna.remove(toRemove);
+		// }
+		//
+		// }
 
-			if(set.contains(a)) {
-				toRemove = ats;
-				break;
-			}
-		}
-		
-		if(toRemove != null) {
-			HashSet<Agent> set = usedTextures.get(toRemove);
-			set.remove(a);
-			a.textureStatus = null;
-
-			if(set.isEmpty()) {
-				usedTextures.remove(toRemove);
-				texturesByDna.remove(toRemove);
-			}
-			
-		}
-		
 	}
 
 	public Map<AgentTextureStage, Sprite> getTexturesByDna() {
@@ -1339,10 +1379,20 @@ public class LibDisplay {
 		@Override
 		public void dispose() {
 			super.dispose();
-			activeTextures--;
-			reference.remove(this);
+
+			if(reference.contains(this)) {
+				activeTextures--;
+				reference.remove(this);
+			}
 		}
 
+	}
+	
+	public boolean isLocationVisibleOnScreen(Vector2 location) {
+		Vector3 projected = worldCamera.project(new Vector3(location.x, location.y, 0));
+		return !(projected.x < -(2 * Agent.getSizeOfSegment()) || projected.y < -(2 * Agent.getSizeOfSegment()) ||
+				projected.x > worldCamera.viewportWidth + (2 * Agent.getSizeOfSegment()) ||
+				projected.y > worldCamera.viewportHeight + (2 * Agent.getSizeOfSegment()));
 	}
 
 	public byte[] getShadowPixmapBytes() {

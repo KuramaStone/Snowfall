@@ -137,6 +137,7 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 	protected boolean wantsToChemosynthesize;
 	protected double wantsToEjectFood;
 	protected double wantsToHeal;
+	protected double wantsToGrow;
 	protected boolean wantsToAttack;
 	protected boolean wantsToHold;
 
@@ -181,6 +182,7 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 	protected boolean isAttacking;
 
 	protected double[] strucDevelopment;
+	protected double developmentLevel;
 
 	public Agent(World world, Species<Agent> parentSpecies, Color color, double strength, double size,
 			Vector2 location) {
@@ -217,7 +219,7 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 	public Hitbox buildHitbox(Vector2 location, float theta) {
 		Rectangle2D bounds = structure.getBounds();
 		Vector2 coreOffset = structure.getCoreOffset();
-		
+
 		float x = location.x;
 		float y = location.y;
 		float sizePerSeg = getSizeOfSegment();
@@ -393,6 +395,8 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 		parentSpecies = null;
 		stomach = null;
 		brain = null;
+		if(this.getBodySprite() != null)
+			this.getBodySprite().getTexture().dispose();
 	}
 
 	private void reproduction() {
@@ -863,12 +867,12 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 
 		double changeAngleBy = (rotation) * Math.toRadians(4);
 
-		this.nextRelativeDirection =(float) getTrueTheta(this.relative_direction + changeAngleBy);
+		this.nextRelativeDirection = (float) getTrueTheta(this.relative_direction + changeAngleBy);
 		// this.relative_direction = -Math.PI / 2;
 
 		wantsToReproduce = out[3] > 0.0;
 
-		double speed = (this.speedGene * Math.pow(getMass(), 1)) * 1;
+		double speed = (this.speedGene * Math.pow(getMass(), 1)) * 1 * currentMetabolism;
 
 		// rotate force relative to current direction
 		Vector2 force = new Vector2(desiredForceX, desiredForceY).multiply(speed);
@@ -886,6 +890,7 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 		wantsToAttack = out[7] >= 0;
 		wantsToHold = out[8] > 0;
 		wantsToDigest = Math.max(out[9], 0);
+		wantsToGrow = Math.max(out[10], 0);
 
 	}
 
@@ -919,7 +924,7 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 		if(age < 10)
 			return;
 
-		double sizeUsage = structure.getStructure().size() * 0.1;
+		double sizeUsage = structure.getSumDevelopmentOfGrownCells() * 0.1 * currentMetabolism;
 		double brainUsage = Math.pow(brain.getConnections().size() + brain.getTotalNeurons().size(), 2) * 0;
 		double movementUsage = Math.abs(lastForceOutput) / Math.pow(getMass(), 2);
 		double used = (sizeUsage + brainUsage + movementUsage) * energyModifier;
@@ -938,7 +943,7 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 			// convert extra hp into energy
 			double hpNeeded = remainder / getEnergyPerHP();
 			this.health += hpNeeded;
-			
+
 			used = this.energy;
 		}
 
@@ -1015,7 +1020,7 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 	}
 
 	public double getReproductionEnergyThreshold() {
-		return structure.getStructure().size() * 50 * getEnergyPerHP();
+		return segmentCount * 50 * getEnergyPerHP();
 	}
 
 	public void setFitness(double fitness) {
@@ -1059,7 +1064,6 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 		velocity = new Vector2();
 		reasonForDeath = "";
 
-		setEnergy(0);
 		noveltyMetrics = null;
 
 		energyConsumed = 0;
@@ -1078,7 +1082,8 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 
 		max_age = Integer.MAX_VALUE;
 		maxHealth = this.getGeneDNA().split("\\.").length * 1000; // structure isn't built yet
-		health = maxHealth * 0.25; // start with low hp
+		health = (getReproductionEnergyThreshold() / 2) / getEnergyPerHP(); // start with low hp
+		setEnergy(getReproductionEnergyThreshold() / 2);
 	}
 
 	public double getHealth() {
@@ -1369,11 +1374,39 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 	}
 
 	public String mutateBodyDNA(String dna, double nodeTypeChance, double dirAddChance, double dirDeleteChance,
-			double copyChance, double deleteChance, double angleChance) {
+			double copyChance, double deleteChance, double angleChance, double swapChance) {
 
 		StringBuilder sb = new StringBuilder("A.");
 
-		for(String chromo : dna.split("\\.")) {
+		String[] array = dna.split("\\.");
+
+		List<Integer> swapped = new ArrayList<>();
+		for(int a = 1; a < array.length; a++) {
+			if(random.nextDouble() < swapChance) {
+				int rndIndex = 1 + random.nextInt(array.length - 1);
+				
+				if(swapped.contains(a) || swapped.contains(rndIndex)) // don't swap twice
+					continue;
+
+				String str1 = array[a];
+				String str2 = array[rndIndex];
+				array[rndIndex] = str1;
+				array[a] = str2;
+
+				swapped.add(a);
+				swapped.add(rndIndex);
+			}
+		}
+
+		for(int a = 0; a < array.length; a++) {
+			String chromo = array[a];
+
+			if(a != 0 && random.nextDouble() < copyChance) {
+				// swap with any value except one
+				int rndIndex = 1 + random.nextInt(array.length - 1);
+				chromo = array[rndIndex];
+			}
+
 			String directions = chromo.replaceAll("[\\D-]", "");
 			String angle = chromo.replaceAll("[\\w^.-]", "");
 			String type = chromo.replaceAll("[^a-zA-Z -]", "");
@@ -1396,25 +1429,25 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 					directions = directions.substring(0, directions.length() - 1);
 			}
 
-			if(random.nextDouble() < angleChance) {
-				int i = random.nextInt(4);
-				angle = "" + switch(i) {
-					case 0 : {
-						yield '!';
-					}
-					case 1 : {
-						yield '@';
-					}
-					case 2 : {
-						yield '#';
-					}
-					case 3 : {
-						yield '$';
-					}
-					default:
-						throw new IllegalArgumentException("Unexpected value: " + i);
-				};
-			}
+			// if(random.nextDouble() < angleChance) {
+			// int i = random.nextInt(4);
+			// angle = "" + switch(i) {
+			// case 0 : {
+			// yield '!';
+			// }
+			// case 1 : {
+			// yield '@';
+			// }
+			// case 2 : {
+			// yield '#';
+			// }
+			// case 3 : {
+			// yield '$';
+			// }
+			// default:
+			// throw new IllegalArgumentException("Unexpected value: " + i);
+			// };
+			// }
 
 			// mutate node type
 			if(random.nextDouble() < nodeTypeChance) {
@@ -1441,20 +1474,19 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 
 			}
 
-			if(random.nextDouble() < copyChance) {
-				// if(directions.length() > 1)
-				// if(random.nextBoolean())
-				// directions = directions.substring(0, directions.length() - 1); // 50% chance to remove the last direction value
-				directions += String.valueOf(random.nextInt(4)); // add direction
-				sb = sb.append(directions).append(type).append(angle).append(".");
-			}
-
 			// add chromosome to dna
 			sb = sb.append(directions).append(type).append(angle).append(".");
 
 		}
-
 		return sb.toString();
+	}
+
+	public double getDevelopmentLevel() {
+		return developmentLevel;
+	}
+
+	public void setDevelopmentLevel(double developmentLevel) {
+		this.developmentLevel = developmentLevel;
 	}
 
 	@Override
@@ -1468,6 +1500,7 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 		state.map.put("bodyGene", this.bodyDNA);
 		state.map.put("health", this.health);
 		state.map.put("strucDevelopment", getStructureDevelopment());
+		state.map.put("developmentLevel", this.developmentLevel);
 
 		return state;
 	}
@@ -1512,15 +1545,15 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 		for(Segment seg : structure.getStructure())
 			seg.setStrength(1);
 		sight_range = (float) (4 * getSizeOfSegment() * Math.max(structure.getBounds().getWidth(), structure.getBounds().getHeight()));
-		
+
 		structure.setDevelopmentOfCell(0, 1); // core cell is grown by default
-		
+
 		if(strucDevelopment != null) {
-			
+
 			for(int i = 0; i < strucDevelopment.length; i++) {
 				structure.setDevelopmentOfCell(i, strucDevelopment[i]);
 			}
-			
+
 		}
 	}
 
@@ -1530,11 +1563,11 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 
 	private double[] getStructureDevelopment() {
 		double[] array = new double[structure.getStructure().size()];
-		
+
 		for(int i = 0; i < array.length; i++) {
 			array[i] = structure.getDevelopmentOfCell(i);
 		}
-		
+
 		return array;
 	}
 
@@ -1583,7 +1616,7 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 
 						Agent rude = (Agent) near.entity;
 						List<CellCollisionInfo> collision = hitbox.intersectsHitbox(rude.hitbox);
-						
+
 						if(collision != null && !collision.isEmpty()) {
 							collisionInfo.put(rude, collision);
 						}
@@ -1743,11 +1776,10 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 	public void setComputedShadowRegion(PolygonRegion region) {
 		this.computedShadowRegion = region;
 	}
-	
-	
+
 	public void createShadowRegion(int mapWidth, int mapHeight) {
 		EarClippingTriangulator triangulator = new EarClippingTriangulator();
-		
+
 		Rectangle2D bounds = world.getBorders().getBounds2D();
 		Vector2[] corners = hitbox.getRotatedCorners(hitbox.getOrigin(), hitbox.getCurrentTheta());
 
@@ -1787,18 +1819,23 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 		// 0, 0, 0, resolution, resolution, 0 });
 		ShortArray tris = triangulator.computeTriangles(vertices);
 		PolygonRegion region = new PolygonRegion(world.getEngine().getDisplay().getShadowBackgroundTexture(), vertices.toArray(), tris.toArray());
-		
+
 		this.setComputedShadowRegion(region);
 	}
-	
+
+	public void shuffleDNA(int x) {
+		for(int i = 0; i < x; i++)
+			this.bodyDNA = mutateBodyDNA(bodyDNA, -1, -1, -1, -1, -1, -1, 0.1);
+	}
+
 	protected boolean hitWall = false;
-	
+
 	@Override
 	protected void hitWall() {
 		super.hitWall();
 		hitWall = true;
 	}
-	
+
 	private Vector2 toQuadVector(Vector2 vector2, int width, int height, Rectangle2D worldbounds) {
 		float x = (float) (((vector2.x - worldbounds.getMinX()) / worldbounds.getWidth()) * width);
 		float y = (float) (((vector2.y - worldbounds.getMinY()) / worldbounds.getHeight()) * height);
@@ -1820,26 +1857,14 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 
 		return !this.location.equals(lastLocation) || this.relative_direction != this.lastRotation;
 	}
-	
+
 	public int getGrowthStage() {
-		int maxStages = (structure.getStructure().size()-1) * 20;
+		int maxStages = (structure.getStructure().size() - 1) * 20;
 		int stage = (int) (maturity * maxStages);
-		
+
 		if(stage > maxStages)
 			stage = maxStages;
-		
+
 		return stage;
 	}
 }
-
-
-
-
-
-
-
-
-
-
-
-
