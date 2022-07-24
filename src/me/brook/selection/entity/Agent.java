@@ -41,6 +41,10 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 
 	private static final long serialVersionUID = -1033773389567070076L;
 
+	protected static final int entitiesToTrack = 1;
+	// sunlight, hue, relative x, relative y, energy, speed, nearby count, to light
+	protected static final int totalInputs = 12 + 7, outputs = 11;
+
 	public static final int ENERGY_LOC = 9;
 	public static final int LOCX_LOC = 0;
 	public static final int LOCY_LOC = 1;
@@ -150,7 +154,6 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 	protected double chemGained;
 	protected double energyUsed;
 
-	private double reproductionEfficiency = 0.5;
 	private double bodyMaintainanceEnergy;
 	protected Entity closestEntity;
 
@@ -164,7 +167,7 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 
 	protected Sprite bodySprite;
 	protected Structure structure;
-	protected String bodyDNA = "A.2B.3C.1E";
+	protected String bodyDNA = "A";// "A.2B.3C.1E";
 	private boolean isActive = false;
 
 	private int cudaID;
@@ -183,6 +186,7 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 
 	protected double[] strucDevelopment;
 	protected double developmentLevel;
+	protected double energyIncome, energySpending;
 
 	public Agent(World world, Species<Agent> parentSpecies, Color color, double strength, double size,
 			Vector2 location) {
@@ -214,6 +218,26 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 	}
 
 	public Agent() {
+	}
+
+	protected double[] hormoneState;
+
+	public void createHormoneState() {
+
+		int total = 0;
+		// these are the output hormones that feed into themselves
+		int movementHormones = total += 3;
+		int rotationHormones = total += 1;
+		int passiveEnergyGainHormones = total += 2;
+		int activeEnergyGainHormones = total += 2;
+		int digestHormones = total += 1;
+		int holdHormones = total += 1;
+		int growHormones = total += 1;
+		int healHormones = total += 1;
+		int blankHormones = total += 3; // blank hormones for it to play with
+
+		hormoneState = new double[total];
+
 	}
 
 	public Hitbox buildHitbox(Vector2 location, float theta) {
@@ -289,6 +313,8 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 			return;
 		}
 
+		this.attachedEntities.removeIf(e -> (e == null || (!e.isAlive() || !e.shouldExist())));
+
 		// calculate maturity
 		this.maturity = calculateMaturity();
 		this.currentMetabolism = (0.5 + this.baseMetabolism) * (1 - Math.max(0, this.maturity - 1));
@@ -304,10 +330,6 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 		// if(this.biteDelay-- < 0 && wantsToEat) {
 		// lookForFood();
 		// }
-		if(wantsToPhotosynthesize && this.structure.hasType(Structure.PHOTO))
-			photosynthesis();
-		if(wantsToChemosynthesize && this.structure.hasType(Structure.CHEMO))
-			chemosynthesis();
 
 		if(this.intersectsWall(this.location, (float) relative_direction)) {
 			stuckInWall();
@@ -339,12 +361,12 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 		return baseMetabolism;
 	}
 
-	protected void chemosynthesis() {
-
+	protected double chemosynthesis() {
+		return 0;
 	}
 
-	protected void photosynthesis() {
-
+	protected double photosynthesis() {
+		return 0;
 	}
 
 	@Override
@@ -416,7 +438,7 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 
 		reproductionDelay = (int) (size); // wait x ticks before being able to breed again
 
-		double energyTransfer = this.getReproductionEnergyThreshold() * energyPercentageForChild;
+		double energyTransfer = this.getReproductionEnergyThreshold();
 		addEnergy(-energyTransfer);
 
 		Agent child = (Agent) this.createClone();
@@ -434,9 +456,10 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 		child.generation = this.generation + 1;
 		child.parent = this;
 
-		double energyForChild = energyTransfer * reproductionEfficiency;
+		double energyForChild = energyTransfer;
 
 		double startHealth = (energyForChild / 2) / getEnergyPerHP(); // half goes into hp
+		double maxHealth = child.getMaxHealth();
 		child.health = startHealth;
 		child.setEnergy(energyForChild / 2);
 		// child.applyForce(random.nextDouble() * Math.PI * 2, child.getMass() * 0);
@@ -779,10 +802,6 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 
 	}
 
-	public void calculateOutputs() {
-
-	}
-
 	public boolean isEntityCloseEnoughToEat(Entity ent) {
 		if(!collisionInfo.containsKey(ent))
 			return false;
@@ -830,6 +849,62 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 
 	private int segmentCount;
 
+	public void calculateOutputs() {
+		//
+		// // intended amount of hormones. each agent can choose which hormones to respond to
+		//
+		// int total = 0;
+		// // these are the output hormones that feed into themselves
+		// int movementHormones = total += 3;
+		// int rotationHormones = total += 1;
+		// int passiveEnergyGainHormones = total += 2;
+		// int activeEnergyGainHormones = total += 2;
+		// int digestHormones = total += 1;
+		// int holdHormones = total += 1;
+		// int growHormones = total += 1;
+		// int healHormones = total += 1;
+		// int blankHormones = total += 3; // blank hormones for it to play with
+		//
+		// // these are input hormones. these hormone values are influenced directly and not kept in the hormone state
+		// int senseHormones = total += this.sensorHormones.length; // the influence of nearby agents
+		// int velocityDetection = total += 2; // vel x, vel y
+		// int energyLevels = total += 1; // energy
+		// int ageLevel = total += 1;
+		// int chemAndPhotoLevels = total += 2;
+		// int upSense = 1; // relative direction to light
+		// int aggressionAwareness = total += 2; // is it attacking, and is it being attacked
+		//
+		// double[] inputs = new double[total];
+		//
+		// // first fill input with hormone states
+		// int index = 0;
+		// for(int i = 0; i < hormoneState.length; i++) {
+		// inputs[index++] = hormoneState[i];
+		// }
+		//
+		// // second, fill in the sensory hormones
+		// for(int i = 0; i < sensorHormones.length; i++) {
+		// inputs[index++] = sensorHormones[i];
+		// }
+		//
+		// Vector2 myRelVelocity = this.velocity.rotate(new Vector2(), this.relative_direction).divide(1 + sight_range);
+		// // fill in the rest of the hormones
+		// inputs[index++] = myRelVelocity.x; // vel x hormone
+		// inputs[index++] = myRelVelocity.y; // vel y hormone
+		// inputs[index++] = 1.0 / (Math.max(1, this.energy));
+		// inputs[index++] = structure.getSumDevelopmentOfGrownCells() / segmentCount;
+		// inputs[index++] = lastLightExposure;
+		// inputs[index++] = lastChemicalExposure;
+		// inputs[index++] = relativeAngleTo(this.relative_direction, Math.PI);
+		// inputs[index++] = 1.0 / (1 + getTicksSinceLastHurt());
+		// inputs[index++] = isAttacking ? 1 : 0;
+		//
+		// brain.setInputs(inputs);
+		// brain.calculate();
+		// double[] outputs = brain.getOutput();
+		// this.lastOutputs = outputs;
+	}
+
 	public void useBrainOutput() {
 		double[] out = this.lastOutputs;
 		if(out == null) {
@@ -848,6 +923,33 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 				throw new IllegalArgumentException("Output " + i + " is Infinite/NaN");
 			}
 		}
+
+		// int total = 0;
+		// // these are the output hormones that feed into themselves
+		// int movementHormones = total += 3;
+		// int rotationHormones = total += 1;
+		// int passiveEnergyGainHormones = total += 2;
+		// int activeEnergyGainHormones = total += 2;
+		// int digestHormones = total += 1;
+		// int holdHormones = total += 1;
+		// int growHormones = total += 1;
+		// int healHormones = total += 1;
+		// int blankHormones = total += 3; // blank hormones for it to play with
+		//
+		// // alter current hormone state
+		// for(int i = 0; i < outputs.length; i++) {
+		// double v = outputs[i];
+		// double sensitivity = 0.05;
+		//
+		// hormoneState[i] += v * sensitivity;
+		// }
+		//
+		// // now read hormone state and take action
+		//
+		// double[] moveHormones = new double[movementHormones];
+		// System.arraycopy(hormoneState, 0, moveHormones, 0, movementHormones);
+		// Vector2 force = calculateForceWithHormones(moveHormones);
+		// this.applyForce(force);
 
 		double rotation = out[0];
 
@@ -936,6 +1038,7 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 			System.err.printf("Used negative energy. Size: %s, Brain: %s, Movement: %s\n", sizeUsage, brainUsage, movementUsage);
 		}
 
+		this.energySpending += used;
 		bodyMaintainanceEnergy += used;
 
 		if(used > this.energy) {
@@ -1020,7 +1123,7 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 	}
 
 	public double getReproductionEnergyThreshold() {
-		return segmentCount * 50 * getEnergyPerHP();
+		return maxHealth * getEnergyPerHP();
 	}
 
 	public void setFitness(double fitness) {
@@ -1327,10 +1430,6 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 		return generation;
 	}
 
-	public double getReproductionEfficiency() {
-		return reproductionEfficiency;
-	}
-
 	public float getHue() {
 		return hue;
 	}
@@ -1374,7 +1473,7 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 	}
 
 	public String mutateBodyDNA(String dna, double nodeTypeChance, double dirAddChance, double dirDeleteChance,
-			double copyChance, double deleteChance, double angleChance, double swapChance) {
+			double copyChance, double deleteChance, double nodeAddChance, double angleChance, double swapChance) {
 
 		StringBuilder sb = new StringBuilder("A.");
 
@@ -1384,7 +1483,7 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 		for(int a = 1; a < array.length; a++) {
 			if(random.nextDouble() < swapChance) {
 				int rndIndex = 1 + random.nextInt(array.length - 1);
-				
+
 				if(swapped.contains(a) || swapped.contains(rndIndex)) // don't swap twice
 					continue;
 
@@ -1410,6 +1509,35 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 			String directions = chromo.replaceAll("[\\D-]", "");
 			String angle = chromo.replaceAll("[\\w^.-]", "");
 			String type = chromo.replaceAll("[^a-zA-Z -]", "");
+
+			if(random.nextDouble() < nodeAddChance) {
+				int i = 1 + random.nextInt(4);
+				String t = switch(i) {
+					// case 0: {
+					// // never a case 0 because cores cannot be mutated in.
+					// }
+					case 1 : {
+						yield Structure.PHOTO;
+					}
+					case 2 : {
+						yield Structure.CHEMO;
+					}
+					case 3 : {
+						yield Structure.THRUST;
+					}
+					case 4 : {
+						yield Structure.HUNT;
+					}
+					default:
+						throw new IllegalArgumentException("Unexpected value: " + i);
+				};
+
+				sb = sb
+						.append(directions) // start at this cell's loc
+						.append(String.valueOf(random.nextInt(4)))
+						.append(t)
+						.append(".");
+			}
 
 			if(type.equals(Structure.CORE)) {
 				// dont change core
@@ -1514,7 +1642,7 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 	}
 
 	protected double getEnergyPerHP() {
-		return 33;
+		return 16;
 	}
 
 	public double damage(Entity attacker, double damage) {
@@ -1550,7 +1678,7 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 
 		if(strucDevelopment != null) {
 
-			for(int i = 0; i < strucDevelopment.length; i++) {
+			for(int i = 0; i < Math.min(strucDevelopment.length, structure.getStructure().size()); i++) {
 				structure.setDevelopmentOfCell(i, strucDevelopment[i]);
 			}
 
@@ -1823,11 +1951,6 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 		this.setComputedShadowRegion(region);
 	}
 
-	public void shuffleDNA(int x) {
-		for(int i = 0; i < x; i++)
-			this.bodyDNA = mutateBodyDNA(bodyDNA, -1, -1, -1, -1, -1, -1, 0.1);
-	}
-
 	protected boolean hitWall = false;
 
 	@Override
@@ -1856,6 +1979,14 @@ public abstract class Agent extends Entity implements GeneticCarrier, Serializab
 			return true;
 
 		return !this.location.equals(lastLocation) || this.relative_direction != this.lastRotation;
+	}
+
+	public double getEnergyIncome() {
+		return energyIncome;
+	}
+
+	public double getEnergySpending() {
+		return energySpending;
 	}
 
 	public int getGrowthStage() {

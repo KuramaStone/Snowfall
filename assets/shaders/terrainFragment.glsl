@@ -216,7 +216,7 @@ void main() {
 //	Noise wormMap = new Noise(3, (1.0 / 1800) * 50, 0.5, 2, 1234, 4214);
 //	Noise distortionMap = new Noise(3, (1.0 / 1800) * 25, 0.5, 2, 1234, 4214);
 
-	vec2 p1 = vec2(0.6, 0.00);
+	vec2 p1 = vec2(0.5, 0.00);
 	vec2 p2 = vec2(1, 1);
 
 	float x = v_texCoords.x * width;

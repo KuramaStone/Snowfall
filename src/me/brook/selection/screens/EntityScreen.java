@@ -221,7 +221,7 @@ public class EntityScreen extends DisplayScreen {
 		}
 
 		// draw spatial hash
-		// display.drawSpatialHash();
+//		 display.drawSpatialHash();
 
 	}
 

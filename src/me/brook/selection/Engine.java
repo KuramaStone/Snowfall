@@ -40,8 +40,8 @@ public class Engine extends Game {
 	protected boolean passiveMode = false;
 	protected String[] args;
 	private String saveLocationPath;
+	private RenderingMode defaultMode;
 
-	public boolean isLoading = false;
 	public boolean finishedLoading = false;
 	private long currentThreadID;
 
@@ -81,14 +81,19 @@ public class Engine extends Game {
 
 	@Override
 	public void render() {
-		if(!finishedLoading) {
-			isLoading = true;
-			loadSome();
-		}
-		super.render();
+		try {
 
-		if(finishedLoading)
-			tick();
+			if(!finishedLoading) {
+				loadSome();
+			}
+			super.render();
+
+			if(finishedLoading)
+				tick();
+		}
+		catch (Exception e) {
+			e.printStackTrace();
+		}
 	}
 
 	long delay;
@@ -144,12 +149,31 @@ public class Engine extends Game {
 			queue.add((Runnable) () -> {
 				loadingStage = "Loading args";
 				String path = new JFileChooser().getFileSystemView().getDefaultDirectory().toString() + "\\Snowfall";
+				RenderingMode mode = RenderingMode.ENTITIES;
+
 				int arg = containsArgCommand("-o");
 				if(arg != -1) {
 					if(args.length > arg + 1)
 						path = args[arg + 1];
 				}
+				arg = containsArgCommand("-mode");
+				if(arg != -1) {
+					if(args.length > arg + 1) {
+						String str = args[arg + 1];
+
+						if(str.equalsIgnoreCase("fast")) {
+							mode = RenderingMode.FAST;
+						}
+						else if(str.equalsIgnoreCase("entities")) {
+							mode = RenderingMode.ENTITIES;
+						}
+
+					}
+
+				}
+
 				this.saveLocationPath = path;
+				defaultMode = mode;
 				loadingStage = "Loading world";
 			});
 
@@ -169,14 +193,14 @@ public class Engine extends Game {
 				loadingStage = "Building agents";
 
 			});
-//			queue.add((Runnable) () -> {
-//				world.getBorders().generatePolygonsFromMap();
-//			});
+			// queue.add((Runnable) () -> {
+			// world.getBorders().generatePolygonsFromMap();
+			// });
 			queue.add((Runnable) () -> {
 				libDisplay.buildAllAgents();
 
 				Gdx.input.setInputProcessor(new InputDetector(this));
-				setRenderingMode(RenderingMode.ENTITIES);
+				setRenderingMode(defaultMode);
 			});
 
 		}
@@ -206,13 +230,14 @@ public class Engine extends Game {
 	}
 
 	static Engine _engine;
+	public static boolean isInDebugEclipse = false;
 
 	public static void main(String[] args) throws Exception {
-		boolean isDebug = java.lang.management.ManagementFactory.getRuntimeMXBean().getInputArguments().toString()
+		isInDebugEclipse = java.lang.management.ManagementFactory.getRuntimeMXBean().getInputArguments().toString()
 				.indexOf("-agentlib:jdwp") > 0;
 
 		Lwjgl3ApplicationConfiguration config = new Lwjgl3ApplicationConfiguration();
-		config.setTitle(isDebug ? "Snowfall Debug" : "Snowfall");
+		config.setTitle(isInDebugEclipse ? "Snowfall Debug" : "Snowfall");
 		config.setForegroundFPS(0);
 		config.setIdleFPS(Integer.MAX_VALUE);
 
@@ -223,6 +248,61 @@ public class Engine extends Game {
 		config.setBackBufferConfig(8, 8, 8, 8, 16, 0, 1);
 
 		_engine = new Engine(args);
+
+		if(!isInDebugEclipse)
+			new Thread(new Runnable() {
+
+				int lastTick = -1;
+				int updatesSinceChanged = 0;
+
+				@Override
+				public void run() {
+					while(true) {
+						if(_engine.finishedLoading) {
+							if(_engine.getWorld() != null) {
+
+								// check if engine has crashed
+								int t = _engine.getWorld().getTime();
+
+								if(t == lastTick) {
+									updatesSinceChanged++;
+									System.err.println("World hasn't changed in " + updatesSinceChanged + " seconds...");
+								}
+								else
+									updatesSinceChanged = 0;
+								lastTick = t;
+								// System.out.println("SinceChanged: " + updatesSinceChanged);
+
+								// be careful about saving as that may take some time
+
+								int timeout = 30;
+								if(_engine.world.isSaving) // extra long timeout if saving
+									timeout = 120;
+
+								if(updatesSinceChanged >= timeout) { // if unchanged for X seconds
+									try {
+										Gdx.app.postRunnable((Runnable) () -> _engine.shutdown());
+									}
+									catch(Exception e) {
+										e.printStackTrace();
+									}
+
+									System.err.println("Shutting down due to frozen world.");
+									System.exit(0);
+								}
+							}
+						}
+
+						try {
+							Thread.sleep(1000l);
+						}
+						catch(InterruptedException e) {
+							e.printStackTrace();
+						}
+					}
+				}
+
+			}).start();
 
 		config.setWindowListener(new Lwjgl3WindowAdapter() {
 			@Override

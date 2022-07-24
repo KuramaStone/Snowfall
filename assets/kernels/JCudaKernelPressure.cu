@@ -9,11 +9,78 @@ extern "C"
 
 using namespace std;
 
+#define NEARCOUNT 32
+
 class DistanceData {
 public:
 	int key;
 	float distance;
 };
+
+extern "C" __device__ int HSBtoRGB(float hue, float saturation,
+		float brightness) {
+	int r = 0, g = 0, b = 0;
+	if (saturation == 0) {
+		r = g = b = (int) (brightness * 255.0f + 0.5f);
+	} else {
+		float h = (hue - (float) floor(hue)) * 6.0f;
+		float f = h - (float) floor(h);
+		float p = brightness * (1.0f - saturation);
+		float q = brightness * (1.0f - saturation * f);
+		float t = brightness * (1.0f - (saturation * (1.0f - f)));
+		switch ((int) h) {
+		case 0:
+			r = (int) (brightness * 255.0f + 0.5f);
+			g = (int) (t * 255.0f + 0.5f);
+			b = (int) (p * 255.0f + 0.5f);
+			break;
+		case 1:
+			r = (int) (q * 255.0f + 0.5f);
+			g = (int) (brightness * 255.0f + 0.5f);
+			b = (int) (p * 255.0f + 0.5f);
+			break;
+		case 2:
+			r = (int) (p * 255.0f + 0.5f);
+			g = (int) (brightness * 255.0f + 0.5f);
+			b = (int) (t * 255.0f + 0.5f);
+			break;
+		case 3:
+			r = (int) (p * 255.0f + 0.5f);
+			g = (int) (q * 255.0f + 0.5f);
+			b = (int) (brightness * 255.0f + 0.5f);
+			break;
+		case 4:
+			r = (int) (t * 255.0f + 0.5f);
+			g = (int) (p * 255.0f + 0.5f);
+			b = (int) (brightness * 255.0f + 0.5f);
+			break;
+		case 5:
+			r = (int) (brightness * 255.0f + 0.5f);
+			g = (int) (p * 255.0f + 0.5f);
+			b = (int) (q * 255.0f + 0.5f);
+			break;
+		}
+	}
+	return 0xff000000 | (r << 16) | (g << 8) | (b << 0);
+}
+
+extern "C" __device__ float atan2f(float y, float x) {
+	float a = 0;
+
+	if (x > 0) {
+		a = atan(y / x);
+	} else if (x < 0 && y >= 0) {
+		a = atan(y / x) + 3.14159265359;
+	} else if (x < 0 && y < 0) {
+		a = atan(y / x) - 3.14159265359;
+	} else if (x == 0 && y > 0) {
+		a = 3.14159265359 / 2;
+	} else if (x == 0 && y < 0) {
+		a = -3.14159265359 / 2;
+	}
+
+	return a;
+}
 
 extern "C" __device__ float clamp2(float min, float max, float a) {
 	if (a > max)
@@ -31,148 +98,265 @@ extern "C" __device__ float distance(float2 a, float2 b) {
 	return pow(a.x - b.x, 2) + pow(a.y - b.y, 2);
 }
 
-extern "C" __global__ void addVelocity(int index, float x, float y,
-		float *inputs) {
-	inputs[index + 1] += x;
-	inputs[index + 2] += y;
+extern "C" __device__ int IX(int x, int y, int width, int entries) {
+	return (x + y * width) * entries;
 }
 
-extern "C" __global__ void addDensity(int index, float amount, float *inputs) {
-	inputs[index + 0] += amount;
+extern "C" __device__ float lerp(float i, float j, float a) {
+	return i + a * (j - i);
 }
 
-extern "C" __global__ void update(int worldWidth, int worldHeight, int entries,
-		float *inputs, float* outputs) {
+extern "C" __device__ float min2(float i, float j) {
+	if (i > j)
+		return j;
 
-	int threadID = blockIdx.x * blockDim.x + threadIdx.x;
-	if (threadID < (worldWidth * worldHeight)) {
-		float myDensity = inputs[threadID * entries + 3]; // unaltered density
-		// density of -1 indicates a wall
-		if (myDensity == -1)
-			return;
+	return i;
+}
+extern "C" __device__ void exchange(DistanceData *a, int i, int j) {
+	DistanceData t = a[i];
+	a[i] = a[j];
+	a[j] = t;
+}
 
-		// set last calculation's result as the new current last value
-		inputs[threadID * entries + 3] = inputs[threadID * entries + 0];
-		inputs[threadID * entries + 4] = inputs[threadID * entries + 1];
-		inputs[threadID * entries + 5] = inputs[threadID * entries + 2];
+extern "C" __device__ void compare(DistanceData *a, int i, int j, bool dir) {
+	if (dir == (a[i].distance > a[j].distance))
+		exchange(a, i, j);
+}
 
-		outputs[threadID] = clamp2(0, 1000000, inputs[threadID * entries + 0]);
+extern "C" __device__ void bitonicMerge(DistanceData *a, int lo, int n,
+		bool dir) {
+	if (n > 1) {
+		int m = n / 2;
+		for (int i = lo; i < lo + m; i++)
+			compare(a, i, i + m, dir);
+		bitonicMerge(a, lo, m, dir);
+		bitonicMerge(a, lo + m, m, dir);
 	}
 }
 
-extern "C" __global__ void move(int worldWidth, int worldHeight, int entries,
-		float *inputs) {
-
-	int threadID = blockIdx.x * blockDim.x + threadIdx.x;
-	if (threadID < (worldWidth * worldHeight)) {
-		float myDensity = inputs[threadID * entries + 3]; // unaltered density
-		// density of -1 indicates a wall
-		if (myDensity == -1)
-			return;
-
-		int x = (int) fmod2(threadID, worldWidth);
-		int y = (int) (threadID / worldWidth);
-		float vx = inputs[threadID * entries + 1];
-		float vy = inputs[threadID * entries + 2];
-
-		if (vx == 0 && vy == 0)
-			return;
-
-		// add density and velocity to (x+vx, y+vy)
-		int x2 = x + vx;
-		int y2 = y + vy;
-		x2 = clamp2(0, worldWidth-1, x2);
-		y2 = clamp2(0, worldHeight-1, y2);
-		if (x2 == 0) {
-			if (vx < 0)
-				vx = 0;
-		}
-		if (x2 == worldWidth - 1) {
-			if (vx > 0)
-				vx = 0;
-		}
-		if (y2 == 0) {
-			if (vy < 0)
-				vy = 0;
-		}
-		if (y2 == worldHeight - 1) {
-			if (vy > 0)
-				vy = 0;
-		}
-
-		if(x2 == x && y2 == y)
-			return;
-
-		int id2 = (x2 + y2 * worldWidth) * entries;
-
-		if (inputs[id2] == -1)
-			return; // don't move into walls
-
-		// my spot
-		inputs[threadID * entries + 0] = myDensity / 2;
-
-		// next spot
-		inputs[id2 + 0] += myDensity / 2; // next density
-		inputs[id2 + 1] += vx * 1; // next vx
-		inputs[id2 + 2] += vy * 1; // next vy
+extern "C" __device__ void bitonicSort(DistanceData *a, int lo, int n,
+		bool dir) {
+	if (n > lo) {
+		int m = (n - lo) / 2;
+		bitonicSort(a, lo, m, true);
+		bitonicSort(a, lo + m, m, false);
+		bitonicMerge(a, lo, n, dir);
 	}
 }
 
-extern "C" __global__ void diffuse(int worldWidth, int worldHeight, int entries,
-		float *inputs, float *output) {
+extern "C" __device__ void sortDistances(DistanceData *a, int start, int end) {
+	bitonicSort(a, start, end, true);
+}
+
+extern "C" __device__ float2 rotate(float2 center, float2 loc, float theta) {
+	double cs = cos(theta);
+	double sn = sin(theta);
+
+	double translated_x = loc.x - center.x;
+	double translated_y = loc.y - center.y;
+
+	double result_x = translated_x * cs - translated_y * sn;
+	double result_y = translated_x * sn + translated_y * cs;
+
+	result_x += center.x;
+	result_y += center.y;
+
+	return make_float2(result_x, result_y);
+}
+
+extern "C" __global__ void sortNeighbors(int worldWidth, int worldHeight,
+		int *worldData, int maxParticles, float *inputs, int entries,
+		int *neighbors) {
 
 	int threadID = blockIdx.x * blockDim.x + threadIdx.x;
-	if (threadID < (worldWidth * worldHeight)) {
-		float myDensity = inputs[threadID * entries + 3]; // unaltered density
-		// density of -1 indicates a wall
-		if (myDensity == -1)
+	if (threadID < worldData[0]) {
+		float x = inputs[threadID * entries + 0];
+		float y = inputs[threadID * entries + 1];
+		float vx = inputs[threadID * entries + 2];
+		float vy = inputs[threadID * entries + 3];
+		float radius = inputs[threadID * entries + 4];
+		float density = inputs[threadID * entries + 5];
+		float mass = (radius * radius * 3.14159265359) * density;
+
+		// really bad algorithm for now
+		float maxRange = radius + radius * 20;
+		float longRange2 = maxRange * maxRange;
+
+		int nearbyIndex = 0;
+
+		for (int i = 0; i < worldData[0]; i++) {
+			int nearID = i;
+
+			float x2 = inputs[nearID * entries + 0];
+			float y2 = inputs[nearID * entries + 1];
+			float r2 = inputs[nearID * entries + 4];
+
+			float distRaw = pow(x - x2, 2) + pow(y - y2, 2);
+			if (distRaw <= longRange2) {
+				neighbors[threadID * NEARCOUNT + nearbyIndex] = nearID;
+
+				if (nearbyIndex++ == NEARCOUNT)
+					break;
+			}
+		}
+
+	}
+}
+
+extern "C" __device__ float isOOB(int width, int height, float x, float y,
+		float radius) {
+	if (x < radius)
+		return 6.28 / 4 * 2;
+	if (x >= width - radius)
+		return 6.28 / 4 * 0;
+	if (y < radius)
+		return 6.28 / 4 * 3;
+	if (y >= height - radius)
+		return 6.28 / 4 * 1;
+	return -1;
+}
+
+extern "C" __global__ void applyForces(int worldWidth, int worldHeight,
+		int *worldData, int maxParticles, float *inputs, int entries,
+		int *neighbors) {
+
+	int threadID = blockIdx.x * blockDim.x + threadIdx.x;
+	if (threadID < worldData[0]) {
+		float x = inputs[threadID * entries + 0];
+		float y = inputs[threadID * entries + 1];
+		if (x == -1)
 			return;
+		float vx = inputs[threadID * entries + 2];
+		float vy = inputs[threadID * entries + 3];
+		float radius = inputs[threadID * entries + 4];
 
-		int x = (int) fmod2(threadID, worldWidth);
-		int y = (int) (threadID / worldWidth);
+		// add new forces
+		float vx2 = vx + inputs[threadID * entries + 6];
+		float vy2 = vy + inputs[threadID * entries + 7];
+//		vy2 += .2; // gravity
 
-		float newDensity = myDensity;
+		// check if  it would take them out of bounds
+		float collAngle = isOOB(worldWidth, worldHeight, x + vx2, y + vy2,
+				radius);
+		if (collAngle != -1) { // collides
 
-		// diffuse. average nearby cells that aren't barriers
-		float a = -1;
-		if (x + 1 >= 0 && x + 1 < worldWidth) {
-			a = inputs[(x + 1 + y * worldWidth) * entries + 3];
+			// rotate vx2, vy2 by collAngle and set vx2 to 0
+			float2 result = rotate(make_float2(0, 0), make_float2(vx2, vy2),
+					-collAngle);
+			result.x = 0;
+			result = rotate(make_float2(0, 0), result, collAngle); // rotate back and get final result
+			vx2 = result.x;
+			vy2 = result.y;
+			vx2 = 0;
+			vy2 = 0;
+
+			// vx2 and vy2 will both no longer collide with the wall
 		}
-		float b = -1;
-		if (x - 1 >= 0 && x - 1 < worldWidth) {
-			b = inputs[(x - 1 + y * worldWidth) * entries + 3];
-		}
-		float c = -1;
-		if (y + 1 >= 0 && y + 1 < worldHeight) {
-			c = inputs[(x + (y + 1) * worldWidth) * entries + 3];
-		}
-		float d = -1;
-		if (y - 1 >= 0 && y - 1 < worldHeight) {
-			d = inputs[(x + (y - 1) * worldWidth) * entries + 3];
+		x += vx2;
+		y += vy2;
+
+		float vel = pow(vx2, 2) + pow(vy2, 2);
+		float resististance = 1.0 / (1 + pow(vel * 4, 2)); // slow down more as speed increases
+
+		inputs[threadID * entries + 0] = x;
+		inputs[threadID * entries + 1] = y;
+		inputs[threadID * entries + 2] = vx2 * resististance;
+		inputs[threadID * entries + 3] = vy2 * resististance;
+		inputs[threadID * entries + 6] = 0;
+		inputs[threadID * entries + 7] = 0;
+
+	}
+}
+
+extern "C" __global__ void calculateForces(int worldWidth, int worldHeight,
+		int *worldData, int maxParticles, float *inputs, int entries,
+		int *neighbors) {
+
+	int threadID = blockIdx.x * blockDim.x + threadIdx.x;
+	if (threadID < worldData[0]) {
+		float x = inputs[threadID * entries + 0];
+		float y = inputs[threadID * entries + 1];
+		if (x == -1)
+			return;
+		float vx = inputs[threadID * entries + 2];
+		float vy = inputs[threadID * entries + 3];
+		float radius = inputs[threadID * entries + 4];
+		float density = inputs[threadID * entries + 5];
+		float mass = (radius * radius * 3.14159265359) * density;
+
+		// calculate forces to other particles
+
+		for (int i = 0; i < NEARCOUNT; i++) {
+			int nearID = neighbors[threadID * NEARCOUNT + i];
+
+			if (nearID != -1) {
+				float x2 = inputs[nearID * entries + 0];
+				float y2 = inputs[nearID * entries + 1];
+				float vx2 = inputs[nearID * entries + 2];
+				float vy2 = inputs[nearID * entries + 3];
+				float r2 = inputs[nearID * entries + 4];
+				float d2 = inputs[nearID * entries + 5];
+
+				float distRaw = pow(x - x2, 2) + pow(y - y2, 2);
+
+				float shortRangeRepulsionMax = radius + radius * 4 - r2;
+				float force = 0.1;
+
+				// if distance less than shortRange, pull it. Otherwise, it must be long range for it to be here
+				if (distRaw <= pow(shortRangeRepulsionMax, 2)) {
+					force = force / (1 + distRaw);
+
+				} else {
+					force = -force * distRaw / 1000;
+				}
+
+				float theta = atan2f(y - y2, x - x2);
+				// get relative forces
+				float fX = cos(theta) * force;
+				float fY = sin(theta) * force;
+
+				inputs[nearID * entries + 6] -= fX; // force to add next frame
+				inputs[nearID * entries + 7] -= fY; // force to add next frame
+
+			}
+
 		}
 
-		int total = 5;
-		if (a == -1) {
-			total--;
-			a = 0;
-		}
-		if (b == -1) {
-			total--;
-			b = 0;
-		}
-		if (c == -1) {
-			total--;
-			c = 0;
-		}
-		if (d == -1) {
-			total--;
-			d = 0;
-		}
-
-		newDensity = (a + b + c + d + myDensity) / total; // diffused amount
-
-		inputs[threadID * entries + 0] = newDensity; // current density
 	}
 
+}
+
+extern "C" __global__ void render(int worldWidth, int worldHeight,
+		int *worldData, int maxParticles, float *inputs, int entries,
+		char *output) {
+
+	int threadID = blockIdx.x * blockDim.x + threadIdx.x;
+	if (threadID < worldWidth * worldHeight) {
+		int x = fmod2(threadID, worldWidth);
+		int y = threadID / worldWidth;
+
+		// get distance to closest particle
+
+		float heatSum = 0;
+
+		for (int i = 0; i < worldData[0]; i++) {
+
+			int id = i;
+
+			if (id != -1) {
+				float x2 = inputs[id * entries + 0];
+				float y2 = inputs[id * entries + 1];
+				float hue = inputs[id * entries + 8];
+
+				float dist = pow(x - x2, 2) + pow(y - y2, 2);
+
+				heatSum += 1 / (1 + dist);
+			}
+		}
+		heatSum = clamp2(0.8, 1, heatSum);
+
+		output[threadID] = (255 * heatSum) - 128;
+
+	}
 }
 

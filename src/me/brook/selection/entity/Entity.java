@@ -132,7 +132,6 @@ public abstract class Entity implements QuadSortable, Comparable<Entity> {
 			this.relative_direction = this.nextRelativeDirection;
 		}
 		else {
-			// calculate normal for wall
 			hitWall();
 		}
 

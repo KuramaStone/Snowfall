@@ -26,7 +26,6 @@ import jcuda.driver.JCudaDriver;
 import me.brook.neat.network.GConnection;
 import me.brook.neat.network.NeatNeuron;
 import me.brook.selection.entity.Agent;
-import me.brook.selection.entity.AgentLife;
 import me.brook.selection.entity.body.Structure;
 import me.brook.selection.tools.Vector2;
 
@@ -81,8 +80,8 @@ public class CudaManager {
 		Arrays.fill(networks, -1);
 		networks[0] = maxNeurons;
 		networks[1] = maxConnections;
-		networks[2] = AgentLife.totalInputs + 1;
-		networks[3] = AgentLife.outputs;
+//		networks[2] = Agent.totalInputs + 1;
+//		networks[3] = Agent.outputs;
 
 		Map<Integer, Integer> ids = new HashMap<>();
 		int idIndex = 0;

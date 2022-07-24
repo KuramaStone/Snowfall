@@ -19,10 +19,10 @@ public class Corpse extends Entity {
 		this.startEnergy = energy;
 		this.startMass = mass;
 
-		size = Math.sqrt(energy / Math.PI) * 0.33; // inverse of entity formula to use same size
+		size = Math.sqrt(energy / Math.PI) * 0.1;
 
 		setDigestionDifficulty(0.05);
-		sensorHormones = buildHormones(1, 0, 0, (float) energy, 0, 0, 0);
+		sensorHormones = buildHormones(0, 0, 0, (float) energy, 1, 1, 0);
 	}
 	
 	@Override
@@ -53,7 +53,7 @@ public class Corpse extends Entity {
 	public void tick(World world) {
 		super.tick(world);
 
-		size = Math.sqrt(Math.max(0, energy) / Math.PI) * 0.33; // inverse of entity formula to use same size
+		size = Math.sqrt(energy / Math.PI) * 0.2;
 		if(size < 5)
 			size = 5;
 

@@ -18,13 +18,10 @@ import com.badlogic.gdx.Input;
 import com.badlogic.gdx.assets.AssetManager;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.GL20;
-import com.badlogic.gdx.graphics.Mesh;
 import com.badlogic.gdx.graphics.OrthographicCamera;
 import com.badlogic.gdx.graphics.Pixmap;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.Texture.TextureFilter;
-import com.badlogic.gdx.graphics.VertexAttribute;
-import com.badlogic.gdx.graphics.VertexAttributes.Usage;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.GlyphLayout;
 import com.badlogic.gdx.graphics.g2d.PolygonRegion;
@@ -37,19 +34,14 @@ import com.badlogic.gdx.graphics.glutils.ImmediateModeRenderer20;
 import com.badlogic.gdx.graphics.glutils.ShaderProgram;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer.ShapeType;
-import com.badlogic.gdx.math.EarClippingTriangulator;
 import com.badlogic.gdx.math.Matrix4;
 import com.badlogic.gdx.math.Vector3;
-import com.badlogic.gdx.utils.FloatArray;
 import com.badlogic.gdx.utils.ScreenUtils;
-import com.badlogic.gdx.utils.ShortArray;
 
-import me.brook.neat.Population;
 import me.brook.neat.network.GConnection;
 import me.brook.neat.network.NeatNetwork;
 import me.brook.neat.network.NeatNeuron;
 import me.brook.neat.network.Phenotype.Pheno;
-import me.brook.selection.LibDisplay.AgentTextureStage;
 import me.brook.selection.entity.Agent;
 import me.brook.selection.entity.Entity;
 import me.brook.selection.entity.body.Hitbox;
@@ -59,6 +51,7 @@ import me.brook.selection.screens.EntityScreen;
 import me.brook.selection.screens.FastScreen;
 import me.brook.selection.screens.InfoScreen;
 import me.brook.selection.screens.LoadingScreen;
+import me.brook.selection.tools.SpatialHashing;
 import me.brook.selection.tools.SpatialHashing.Chunk;
 import me.brook.selection.tools.Vector2;
 
@@ -71,6 +64,7 @@ public class LibDisplay {
 	public AssetManager assets;
 
 	public ShapeRenderer shapes;
+	private ImmediateModeRenderer20 imModeRender;
 
 	public OrthographicCamera worldCamera, staticCamera;
 
@@ -119,6 +113,7 @@ public class LibDisplay {
 		batch = new SpriteBatch();
 		polybatch = new PolygonSpriteBatch();
 		shapes = new ShapeRenderer();
+		imModeRender = new ImmediateModeRenderer20(1_000_000, false, true, 0);
 
 		font = new BitmapFont();
 
@@ -252,7 +247,7 @@ public class LibDisplay {
 		try {
 			List<Agent> toBuild = engine.getWorld().getToBuild();
 
-			int amount = 25;
+			int amount = 250;
 
 			for(int i = 0; i < toBuild.size(); i++) {
 				Agent a = toBuild.remove(i);
@@ -297,11 +292,11 @@ public class LibDisplay {
 	}
 
 	public int calcShadowWidth() {
-		return (int) (engine.getWorld().getWorldWidth() / 16);
+		return (int) (engine.getWorld().getWorldWidth() / (Agent.getSizeOfSegment() * 2));
 	}
 
 	public int calcShadowHeight() {
-		return (int) (engine.getWorld().getWorldHeight() / 32);
+		return (int) (engine.getWorld().getWorldHeight() / (Agent.getSizeOfSegment() * 2));
 	}
 
 	public void renderShadows() {
@@ -358,17 +353,18 @@ public class LibDisplay {
 		// polybatch.begin();
 		PolygonRegion polyRegion;
 
-		polybatch.setColor(0, 0, 0, 0.5f);
+		float alpha = 0.5f;
+		polybatch.setColor(0, 0, 0, alpha);
 
 		int maxVertices = (9) * toRender.size();
-		ImmediateModeRenderer20 ir = new ImmediateModeRenderer20(maxVertices, false, true, 0);
 
 		org.lwjgl.opengl.GL20.glEnable(org.lwjgl.opengl.GL20.GL_BLEND);
 		org.lwjgl.opengl.GL20.glBlendFunc(org.lwjgl.opengl.GL20.GL_ONE, org.lwjgl.opengl.GL20.GL_ONE_MINUS_CONSTANT_ALPHA);
 
-		ir.begin(matrix, GL20.GL_TRIANGLES);
+		imModeRender.begin(matrix, GL20.GL_TRIANGLES);
 		ScreenUtils.clear(0, 0, 0, 0);
 
+		int shadowsRendered = 0;
 		float colorBits = new Color(0, 0, 0, 0.5f).toFloatBits();
 		for(int i = 0; i < toRender.size(); i++) {
 			Entity entity = toRender.get(i);
@@ -378,17 +374,30 @@ public class LibDisplay {
 					Hitbox box = agent.getHitbox();
 					if(box == null)
 						continue;
+					
+					if(engine.getWorld().getLightAt(agent.getLocation()) <= 0.01) {
+						continue;
+					}
 
 					polyRegion = agent.getComputedShadowRegion();
 					if(polyRegion == null)
 						continue;
+					
+					// check if there are more than 1/alpha agents above it
+//					double w = Math.max(agent.getStructure().getBounds().getWidth(), agent.getStructure().getBounds().getHeight());
+//					Rectangle2D rect = new Rectangle2D.Double(agent.getLocation().x-w/2, agent.getLocation().y, w, Math.abs(bounds.getMaxY() - agent.getLocation().y));
+//					Entity[] near = engine.getWorld().getNearbyEntities(rect);
+//					
+//					if(near.length > (1/ alpha + 1))
+//						continue;
 
 					float[] vertices = polyRegion.getVertices();
-
+					
 					for(int j = 0; j < vertices.length;) {
-						ir.color(colorBits);
-						ir.vertex(vertices[j++], vertices[j++], 0);
+						imModeRender.color(colorBits);
+						imModeRender.vertex(vertices[j++], vertices[j++], 0);
 					}
+					shadowsRendered++;
 
 					// polybatch.draw(polyRegion, 0, 0);
 
@@ -396,10 +405,10 @@ public class LibDisplay {
 				}
 			}
 		}
+//		System.out.println(shadowsRendered);
 
-		ir.end();
-		ir.dispose();
-		// polybatch.end();
+		imModeRender.end();
+//		 polybatch.end();
 		Gdx.gl.glBlendEquation(GL20.GL_FUNC_ADD);
 	}
 
@@ -425,14 +434,15 @@ public class LibDisplay {
 	}
 
 	public void drawSpatialHash() {
-		if(engine.getWorld().getSpatialHash() != null)
+		SpatialHashing<Entity> hash = engine.getWorld().getSpatialHash();
+		if(hash == null)
 			return;
 
 		shapes.setProjectionMatrix(worldCamera.combined);
 		shapes.begin(ShapeType.Line);
 		shapes.setColor(Color.WHITE);
 
-		for(Chunk<Entity> chunk : engine.getWorld().getSpatialHash().getChunks().values()) {
+		for(Chunk<Entity> chunk : hash.getChunks().values()) {
 			float x = chunk.getChunkX() * chunk.getSize();
 			float y = chunk.getChunkY() * chunk.getSize();
 
@@ -486,7 +496,7 @@ public class LibDisplay {
 				Agent agent = (Agent) sel;
 				// add selected agent info
 				String ageInfo = String.format("Age: %s", agent.getAge());
-				String reproductionInfo = String.format("Energy: %s : %s", agent.getEnergy(),
+				String energyInfo = String.format("Energy: %s : %s", agent.getEnergy(),
 						agent.getEnergy() / agent.getReproductionEnergyThreshold());
 				String ancestryInfo = String.format("Ancestry: %s : %s", agent.getGeneration(), agent.getChildren());
 				String maturityInfo = String.format("Maturity: %s : %s", agent.getMaturity(), agent.getCurrentMetabolism());
@@ -506,23 +516,25 @@ public class LibDisplay {
 				double c2 = agent.getEntitiesBlockingChemsFactor(); // nearby agents reduce light for this agent
 				String attachedInfo = String.format("Attached: %s", (sel.getAttachedTo() == null ? "null" : sel.getAttachedTo().getUUID().toString()));
 				String velInfo = String.format("Vel: %s, %s", dfdouble.format(sel.getVelocity().x), dfdouble.format(sel.getVelocity().y));
+				String incomeInfo = String.format("Sum: %s || In: %s, Out: %s", dfdouble.format(agent.getEnergyIncome() - agent.getEnergySpending()), dfdouble.format(agent.getEnergyIncome()), dfdouble.format(agent.getEnergySpending()));
 
 				font.draw(batch, ageInfo, x, index++ * h);
-				font.draw(batch, reproductionInfo, x, index++ * h);
-				font.draw(batch, ancestryInfo, x, index++ * h);
+				font.draw(batch, energyInfo, x, index++ * h);
+//				font.draw(batch, ancestryInfo, x, index++ * h);
 				font.draw(batch, maturityInfo, x, index++ * h);
 				// font.draw(batch, foodInfo, x, index++ * h);
 				font.draw(batch, dietInfo, x, index++ * h);
 				// font.draw(batch, nearbyInfo, x, index++ * h);
-				font.draw(batch, "" + agent.getEntitiesBlockingLightFactor(), x, index++ * h);
-				font.draw(batch, miscEnergy, x, index++ * h);
+//				font.draw(batch, "" + agent.getEntitiesBlockingLightFactor(), x, index++ * h);
+//				font.draw(batch, miscEnergy, x, index++ * h);
 				font.draw(batch, geneInfo, x, index++ * h);
 				font.draw(batch, deathInfo, x, index++ * h);
-				font.draw(batch, "" + c1, x, index++ * h);
-				font.draw(batch, "" + c2, x, index++ * h);
-				font.draw(batch, agent.getUUID().toString(), x, index++ * h);
+//				font.draw(batch, "" + c1, x, index++ * h);
+//				font.draw(batch, "" + c2, x, index++ * h);
+//				font.draw(batch, agent.getUUID().toString(), x, index++ * h);
 				font.draw(batch, attachedInfo, x, index++ * h);
 				font.draw(batch, velInfo, x, index++ * h);
+				font.draw(batch, incomeInfo, x, index++ * h);
 
 				// visualize outputs
 
@@ -652,16 +664,20 @@ public class LibDisplay {
 				String ageInfo = String.format("Age: %s", sel.getAge());
 				String energyInfo = String.format("Energy: %s", sel.getEnergy());
 				String attachedInfo = String.format("Attached: %s", (sel.getAttachedTo() == null ? "null" : sel.getAttachedTo().getUUID().toString()));
+				String velInfo = String.format("Vel: %s, %s", dfdouble.format(sel.getVelocity().x), dfdouble.format(sel.getVelocity().y));
 
 				font.draw(batch, ageInfo, x, index++ * h);
 				font.draw(batch, energyInfo, x, index++ * h);
 				font.draw(batch, attachedInfo, x, index++ * h);
+				font.draw(batch, velInfo, x, index++ * h);
 				batch.end();
 			}
 		}
 		else {
 			batch.end();
 		}
+		
+		getCenter();
 	}
 
 	private DecimalFormat timeFormat = new DecimalFormat("00");

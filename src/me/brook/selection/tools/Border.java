@@ -48,6 +48,9 @@ import me.brook.selection.entity.Entity;
 public class Border extends Area implements Serializable, Bounds {
 
 	private static final long serialVersionUID = 7947366831664304294L;
+	private static Color caveColor = new Color(0.85f, 0.65f, 0.42f, 1f);
+	private static int caveBits = -660247553;
+	
 	private List<Line2D> lines;
 	private GeneralPath path;
 	private Rectangle2D bounds2D;
@@ -281,7 +284,7 @@ public class Border extends Area implements Serializable, Bounds {
 		wormShader.setUniformi("wormTexture", 1);
 		Gdx.gl.glActiveTexture(GL20.GL_TEXTURE0);
 
-		batch.setColor(new Color(0.85f, 0.65f, 0.42f, 1f)); // cave color
+		batch.setColor(caveColor); // cave color
 		batch.draw(terrainTexture, 0, 0);
 
 		batch.end();
@@ -595,6 +598,20 @@ public class Border extends Area implements Serializable, Bounds {
 		float alpha = color.a;
 
 		return alpha == 0;
+	}
+
+	public boolean isInCave(Vector2 point) {
+		point = point.copy();
+		point.x -= bounds.getMinX();
+		point.y -= bounds.getMinY();
+
+		point.x = (float) ((point.x / bounds.getWidth()) * worldPixmap.getWidth());
+		point.y = (float) (((1.0 - (point.y / bounds.getHeight()))) * worldPixmap.getHeight());
+
+//		System.out.println("Pixel: " + worldPixmap.getPixel((int) point.x, (int) point.y));
+//		System.out.println("Cave: " + caveBits);
+		
+		return worldPixmap.getPixel((int) point.x, (int) point.y) == caveBits;
 	}
 
 	public static class LineLocation implements QuadSortable {

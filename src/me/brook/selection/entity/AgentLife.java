@@ -9,8 +9,10 @@ import java.util.Map.Entry;
 import me.brook.neat.GeneticCarrier;
 import me.brook.neat.network.NeatNetwork;
 import me.brook.neat.network.NeatNetwork.NeatTransferFunction;
+import me.brook.neat.network.Phenotype.Pheno;
 import me.brook.neat.network.Phenotype;
 import me.brook.neat.randomizer.AsexualReproductionRandomizer;
+import me.brook.neat.randomizer.BoundedRandomizer;
 import me.brook.neat.species.Species;
 import me.brook.selection.LibDisplay.RenderingMode;
 import me.brook.selection.World;
@@ -23,10 +25,6 @@ import me.brook.selection.tools.Vector2;
 public class AgentLife extends Agent {
 
 	private static final long serialVersionUID = -8665240214194443508L;
-
-	private static final int entitiesToTrack = 1;
-	// sunlight, hue, relative x, relative y, energy, speed, nearby count, to light
-	public static final int totalInputs = 12 + 6 * entitiesToTrack, outputs = 11;
 
 	public AgentLife(World world, Species<Agent> parentSpecies, Color color, double speed, double size, Vector2 location, boolean makeBrain) {
 		super(world, parentSpecies, color, speed, size, location, true);
@@ -68,10 +66,17 @@ public class AgentLife extends Agent {
 		}
 		if(!shouldExist())
 			return;
+		this.energySpending = 0;
+		this.energyIncome = 0;
 
 		super.tick(world);
 		grow();
-		attack();
+		double totalGained = 0;
+		totalGained += attack();
+		totalGained += photosynthesis();
+		totalGained += chemosynthesis();
+		this.energyIncome = totalGained;
+
 		heal();
 		this.hitbox = buildHitbox();
 		lastHealth = (float) health;
@@ -89,26 +94,29 @@ public class AgentLife extends Agent {
 		// structures to grow per tick
 		double growthRate = (structure.getStructure().size() - 1.0) / (calculateMaxAge() / 2.0); // age at which maturity equals 1
 		growthRate = Math.min(1, growthRate * wantsToGrow * currentMetabolism);
-		
+
+		if(growthRate < 0)
+			return;
 
 		double energyToGrow = growthRate * (getSizeOfSegment() * getSizeOfSegment()) * 1;
-		
+
 		if(this.energy < energyToGrow) {
 			return;
 		}
-		
+
 		addEnergy(-energyToGrow);
+		this.energySpending += -energyToGrow;
 
 		int maxCells = structure.getStructure().size();
 		boolean passedNewRenderMark = false;
-		
+
 		double frenquency = 0.5f;
 		if(world.getEngine().getRenderingMode() == RenderingMode.ENTITIES) {
 			if(world.getEngine().getDisplay().isLocationVisibleOnScreen(this.location)) {
 				// increase frequency with zoom
 				double longestSide = Math.max(structure.getBounds().getWidth(), structure.getBounds().getHeight()) * Agent.getSizeOfSegment();
 				double percentageofScreenWidth = longestSide / (world.getEngine().getDisplay().getImageWidth() * world.getEngine().getZoom());
-				
+
 				if(percentageofScreenWidth < 0.01) { // if less than 1% of screen, rarely update
 					frenquency = 1;
 				}
@@ -121,17 +129,16 @@ public class AgentLife extends Agent {
 				else { // if bigger than 15%, update frequently
 					frenquency = 0.05;
 				}
-				
-				
+
 			}
 			else {
 				frenquency = 0;
 			}
 		}
-		
-//		if(isSelected())
-//			System.out.println(frenquency);
-		
+
+		// if(isSelected())
+		// System.out.println(frenquency);
+
 		for(int i = 1; i < maxCells; i++) {
 			Segment seg = structure.getStructure().get(i);
 			if(seg.getDevelopment() == 1)
@@ -151,8 +158,6 @@ public class AgentLife extends Agent {
 			seg.setDevelopment(newStage);
 			break; // only grow first cell
 		}
-		
-		
 
 		developmentLevel = structure.getSumDevelopmentOfGrownCells() / structure.getStructure().size();
 
@@ -191,10 +196,12 @@ public class AgentLife extends Agent {
 
 			if(energyToUse == 0)
 				return;
+			double add = energyToUse / getEnergyPerHP();
+			if(add < 0)
+				return;
 
 			addEnergy(-energyToUse);
-
-			double add = energyToUse / getEnergyPerHP();
+			this.energySpending += -energyToUse;
 
 			this.health += add;
 			if(health > maxHealth)
@@ -202,17 +209,86 @@ public class AgentLife extends Agent {
 		}
 	}
 
-	private void attack() {
+	private double attackEntity(Entity entity, boolean isAttackingHunterCell) {
+		if(entity.isAgent()) {
+			Agent prey = (Agent) entity;
+
+			int myCellCount = this.structure.getByType(Structure.HUNT).size();
+			int preyCellCount = prey.structure.getByType(Structure.HUNT).size();
+
+			double mass = getTotalMass();
+			// size modifier
+			double sizeMod = (this.getTotalMass() / (prey.getTotalMass() + this.getTotalMass()));
+			double attackingAttackerMod = 1;
+
+			// reduce damage when attacking a hunter cell
+			// if(isAttackingHunterCell) {
+			// // if hitting a hunter cell, compare total of hunter cells
+			// attackingAttackerMod = ((double) myCellCount) / (myCellCount + preyCellCount);
+			// }
+			double damage = 1 * mass * myCellCount * sizeMod * attackingAttackerMod * currentMetabolism;
+
+			if(damage == 0) {
+				return 0;
+			}
+
+			double damageResult = prey.damage(this, damage);
+
+			double energyGained = damageResult * getEnergyPerHP();
+			boolean preyKilled = prey.getHealth() <= 0;
+			if(preyKilled) { // instantly eat them entirely if they died from damage
+				double preyEnergy = prey.getTotalBodyEnergy();
+				energyGained += preyEnergy;
+
+				// set values just to be safe
+				prey.energy = 0;
+				prey.setBodyMaintainanceEnergy(0);
+				prey.willDropCorpse = false;
+				prey.die(world, "eaten alive");
+			}
+
+			// calculate efficiency
+			// energyGained *= getDietModifier(false);
+			// energyGained *= 0.75;
+			world.totalPreyGained += energyGained;
+
+			EntityBite bite = new EntityBite(prey, energyGained);
+
+			stomach.add(bite);
+			return energyGained;
+		}
+		else {
+			double damage = getTotalMass() * 0.25 * currentMetabolism;
+			damage *= 10; // increase eating of corpses since they're dead
+			// size modifier
+			damage *= this.structure.getByType(Structure.HUNT).size();
+
+			double energyGained = damage * getEnergyPerHP();
+			energyGained = Math.min(energyGained, entity.getEnergy());
+
+			EntityBite bite = new EntityBite(entity, energyGained);
+			stomach.add(bite);
+
+			entity.addEnergy(-energyGained);
+			// entity.die(world, "eaten while its dead because its a corpse so its not exactly alive but it was still eaten.");
+			world.totalScavGained += energyGained;
+			return energyGained;
+		}
+
+	}
+
+	private double attack() {
 		if(!isAlive()) {
-			return;
+			return 0;
 		}
 		if(!isHunter())
-			return;
+			return 0;
 
 		/*
 		 * if wantsToAttack check if entity is an agent and if they're in position to be damaged
 		 */
 		boolean attacked = false;
+		double totalGained = 0;
 		if(wantsToAttack) {
 
 			for(Entity entity : collisionInfo.keySet()) {
@@ -220,106 +296,40 @@ public class AgentLife extends Agent {
 
 					List<CellCollisionInfo> info = collisionInfo.get(entity);
 
-					if(entity.isAgent()) {
-						Agent prey = (Agent) entity;
+					boolean attack = false;
+					boolean isAttackingHunterCell = false;
+					for(CellCollisionInfo cci : info) {
 
-						boolean attack = false;
-						boolean isAttackingHunterCell = false;
-						for(CellCollisionInfo cci : info) {
+						if(cci.cell1.seg.getType().equals(Structure.HUNT))
 
-							if(cci.cell1.seg.getType().equals(Structure.HUNT))
-								if(!cci.cell2.seg.getType().equals(Structure.THRUST)) {
-									attack = true;
-									if(cci.cell2.seg.getType().equals(Structure.HUNT))
-										isAttackingHunterCell = true;
-									break;
-								}
-
-						}
-
-						int myCellCount = this.structure.getByType(Structure.HUNT).size();
-						int preyCellCount = prey.structure.getByType(Structure.HUNT).size();
-
-						if(attack) {
-
-							double mass = getTotalMass();
-							// size modifier
-							double sizeMod = (this.getTotalMass() / (prey.getTotalMass() + this.getTotalMass()));
-							double attackingAttackerMod = 1;
-
-							// reduce damage when attacking a hunter cell
-							if(isAttackingHunterCell) {
-								// if hitting a hunter cell, compare total of hunter cells
-
-								attackingAttackerMod = ((double) myCellCount) / (myCellCount + preyCellCount);
-							}
-							double damage = 1 * mass * myCellCount * sizeMod * attackingAttackerMod * currentMetabolism;
-
-							if(damage == 0) {
-								continue;
-							}
-
-							double damageResult = prey.damage(this, damage);
-
-							double energyGained = damageResult * getEnergyPerHP();
-							boolean preyKilled = prey.getHealth() <= 0;
-							if(preyKilled) { // instantly eat them entirely if they died from damage
-								double preyEnergy = prey.getTotalBodyEnergy();
-								energyGained += preyEnergy;
-
-								// set values just to be safe
-								prey.energy = 0;
-								prey.setBodyMaintainanceEnergy(0);
-								prey.willDropCorpse = false;
-								prey.die(world, "eaten alive");
-							}
-
-							// calculate efficiency
-							// energyGained *= getDietModifier(false);
-							// energyGained *= 0.75;
-							world.totalPreyGained += energyGained;
-
-							EntityBite bite = new EntityBite(prey, energyGained);
-
-							stomach.add(bite);
-							attacked = true;
-						}
-					}
-					else {
-						boolean attack = false;
-						for(CellCollisionInfo cci : info) {
-
-							if(cci.cell1.seg.getType().equals(Structure.HUNT)) {
+							if(cci.cell2 == null || cci.cell2.seg == null) {
 								attack = true;
 								break;
 							}
-						}
+							else if(!cci.cell2.seg.getType().equals(Structure.THRUST)) {
+								attack = true;
+								if(cci.cell2.seg.getType().equals(Structure.HUNT))
+									isAttackingHunterCell = true;
+								break;
+							}
 
-						if(attack) {
+					}
 
-							double damage = getTotalMass() * 0.25 * currentMetabolism;
-							damage *= 10; // increase eating of corpses since they're dead
-							// size modifier
-							damage *= this.structure.getByType(Structure.HUNT).size();
-
-							double energyGained = damage * getEnergyPerHP();
-							energyGained = Math.min(energyGained, entity.getEnergy());
-
-							EntityBite bite = new EntityBite(entity, energyGained);
-							stomach.add(bite);
-
-							entity.addEnergy(-energyGained);
-							// entity.die(world, "eaten while its dead because its a corpse so its not exactly alive but it was still eaten.");
-							world.totalScavGained += energyGained;
-							attacked = true;
-						}
+					if(attack) {
+						totalGained += attackEntity(entity, isAttackingHunterCell);
+						attacked = true;
 					}
 				}
 			}
 		}
 
-		this.isAttacking = attacked;
+		if(attachedEntities != null)
+			for(Entity e : attachedEntities)
+				if(e != null)
+					totalGained += attackEntity(e, false);
 
+		this.isAttacking = attacked;
+		return totalGained;
 	}
 
 	@Override
@@ -333,38 +343,49 @@ public class AgentLife extends Agent {
 				new Phenotype(), true, possibleFunctions,
 				totalInputs, outputs);
 
-		// brain.connectAllLayers();
-		// add quick and easy connections
+		createPhenotype(brain);
 
-		brain.setWeightOf(brain.getLayers().get(0).get(totalInputs).getNeuronID(), brain.getLayers().get(1).get(1).getNeuronID(), 0); // bias to move
-		brain.setWeightOf(brain.getLayers().get(0).get(totalInputs).getNeuronID(), brain.getLayers().get(1).get(4).getNeuronID(), 1); // bias to light
-		brain.setWeightOf(brain.getLayers().get(0).get(totalInputs).getNeuronID(), brain.getLayers().get(1).get(5).getNeuronID(), 1); // bias to chem
-		brain.setWeightOf(brain.getLayers().get(0).get(totalInputs).getNeuronID(), brain.getLayers().get(1).get(7).getNeuronID(), 1); // bias to attack
-		brain.setWeightOf(brain.getLayers().get(0).get(totalInputs).getNeuronID(), brain.getLayers().get(1).get(9).getNeuronID(), 1); // bias to digest
-		brain.setWeightOf(brain.getLayers().get(0).get(totalInputs).getNeuronID(), brain.getLayers().get(1).get(3).getNeuronID(), 1); // bias to fuck
-		brain.setWeightOf(brain.getLayers().get(0).get(totalInputs).getNeuronID(), brain.getLayers().get(1).get(10).getNeuronID(), 3); // bias to grow
+//		brain.connectAllLayers();
+//		brain.randomizeWeights(new BoundedRandomizer(2));
+
+		 brain.setWeightOf(brain.getLayers().get(0).get(totalInputs).getNeuronID(), brain.getLayers().get(1).get(1).getNeuronID(), 0); // bias to move
+		 brain.setWeightOf(brain.getLayers().get(0).get(totalInputs).getNeuronID(), brain.getLayers().get(1).get(4).getNeuronID(), 1); // bias to light
+		 brain.setWeightOf(brain.getLayers().get(0).get(totalInputs).getNeuronID(), brain.getLayers().get(1).get(5).getNeuronID(), 1); // bias to chem
+		 brain.setWeightOf(brain.getLayers().get(0).get(totalInputs).getNeuronID(), brain.getLayers().get(1).get(7).getNeuronID(), 1); // bias to attack
+		 brain.setWeightOf(brain.getLayers().get(0).get(totalInputs).getNeuronID(), brain.getLayers().get(1).get(9).getNeuronID(), 1); // bias to digest
+		 brain.setWeightOf(brain.getLayers().get(0).get(totalInputs).getNeuronID(), brain.getLayers().get(1).get(3).getNeuronID(), 1); // bias to fuck
+		 brain.setWeightOf(brain.getLayers().get(0).get(totalInputs).getNeuronID(), brain.getLayers().get(1).get(10).getNeuronID(), 3); // bias to grow
 
 		brain.labelOutputs("rotate", "forceX", "forceY", "dtf", "light", "chemo", "heal", "attack", "hold", "digest", "grow");
 
-		String[] entityLabels = new String[] { "r", "g", "b", "dist", "rot", "f value" };
-		String[] inputs = new String[totalInputs];
-		int index = 0;
-		for(int i = 0; i < entitiesToTrack; i++) {
-			for(int j = 0; j < entityLabels.length; j++)
-				inputs[index++] = entityLabels[j] + "-" + i;
-		}
-
-		String[] otherLabels = new String[] { "light", "chemo", "speed x",
+		String[] inputs = new String[] { "light", "chemo", "speed x",
 				"speed y", "age",
-				"energy", "nearby", "to light", "wall", "shadows", "hurt", "murdering" };
-
-		for(int i = 0; i < otherLabels.length; i++) {
-			inputs[index++] = otherLabels[i];
-		}
+				"energy", "nearby", "to light", "wall", "shadows", "hurt", "murdering",
+				"p-s", "c-s", "h-s", "e-s", "r-s", "b-s", "g-s" };
 
 		brain.labelInputs(inputs);
 
 		return brain;
+	}
+
+	private void createPhenotype(NeatNetwork brain) {
+		brain.getPhenotype().addPhenotype("pref_diet", new Pheno(0, 0.2, -1, 1));
+		brain.getPhenotype().addPhenotype("child_portion", new Pheno(0.7, 0.2, 0.1, 0.8));
+
+		brain.getPhenotype().addPhenotype("hue", new Pheno(.05, 0.05, 0, 1, true));
+		brain.getPhenotype().addPhenotype("metabolism", new Pheno(0.5, 0.05, 0.2, 2, false));
+		brain.getPhenotype().addPhenotype("density", new Pheno(1.5, 0.1, 1, 2, false));
+		brain.getPhenotype().addPhenotype("speed", new Pheno(1.5, 0.1, 1, 10, false));
+
+		brain.getPhenotype().addPhenotype("geneMultiplier", new Pheno(1.0, 0.5, 0.0001, 1000, false));
+		brain.getPhenotype().addPhenotype("geneFactor", new Pheno(1, 0.5, 0.0001, 1000, false));
+
+		// shuffle
+
+		brain.getPhenotype().getPhenotype("pref_diet").shuffle();
+		brain.getPhenotype().getPhenotype("hue").shuffle();
+		brain.getPhenotype().getPhenotype("metabolism").shuffle();
+		brain.getPhenotype().getPhenotype("density").shuffle();
 	}
 
 	@Override
@@ -411,53 +432,44 @@ public class AgentLife extends Agent {
 		double[] inputs = new double[brain.getInputNeurons().size()];
 
 		int index = 0;
-		for(int i = 0; i < this.lastNearbyEntities.size(); i++) {
-			NearbyEntry closest = this.lastNearbyEntities.get(i);
+		// for(int i = 0; i < this.lastNearbyEntities.size(); i++) {
+		// NearbyEntry closest = this.lastNearbyEntities.get(i);
+		//
+		// if(closest != null) {
+		// if(attachedEntities.contains(closest.entity)) {
+		// continue;
+		// }
+		//
+		// Vector2 relClosest = closest.entity.getLocation().copy();
+		// // translate and rotate relative to agent
+		// relClosest = relClosest.subtract(location).rotate(new Vector2(), -this.getRelativeDirection());
+		//
+		// Color c = closest.entity.getColor();
+		//
+		// if(!closest.entity.shouldExist()) { // check after values are locked
+		// continue;
+		// }
+		//
+		// inputs[index++] = c.getRed() / 255.0;
+		// inputs[index++] = c.getGreen() / 255.0;
+		// inputs[index++] = c.getBlue() / 255.0;
+		// inputs[index++] = relClosest.x / (1 + relative_direction);
+		// inputs[index++] = relClosest.y / (1 + relative_direction);
+		// inputs[index++] = 1.0 / (1 + closest.entity.getEnergy() / 10000.0);
+		//
+		// }
+		// else {
+		// inputs[index++] = 0; // r
+		// inputs[index++] = 0; // g
+		// inputs[index++] = 0; // b
+		// inputs[index++] = 0;
+		// inputs[index++] = 0;
+		// inputs[index++] = 1;
+		// }
+		//
+		// break;
+		// }
 
-			if(closest != null) {
-				if(attachedEntities.contains(closest.entity)) {
-					continue;
-				}
-
-				Vector2 relClosest = closest.entity.getLocation().copy();
-				// translate and rotate relative to agent
-				relClosest = relClosest.subtract(location).rotate(new Vector2(), -this.getRelativeDirection());
-
-				Color c = closest.entity.getColor();
-
-				if(!closest.entity.shouldExist()) { // check after values are locked
-					continue;
-				}
-
-				inputs[index++] = c.getRed() / 255.0;
-				inputs[index++] = c.getGreen() / 255.0;
-				inputs[index++] = c.getBlue() / 255.0;
-				inputs[index++] = 1 / (1 + relClosest.distanceToSq(this.location));
-				inputs[index++] = relativeAngleTo(this.relative_direction, closest.entity.relative_direction); // show entity's direction relative to our own
-				inputs[index++] = 1.0 / (1 + closest.entity.getEnergy() / 10000.0);
-
-			}
-			else {
-				inputs[index++] = 0; // r
-				inputs[index++] = 0; // g
-				inputs[index++] = 0; // b
-				inputs[index++] = 0;
-				inputs[index++] = 0;
-				inputs[index++] = 1;
-			}
-
-			break;
-		}
-
-		boolean isFacingWall = true;
-
-		for(int step = 0; step < 2; step++) {
-			// step forward to see if the wall intersects that point until sight_range units away
-			if(world.getBorders().intersects(this.location.add(new Vector2(this.relative_direction).multiply(this.sight_range * (step / 4.0))))) {
-				isFacingWall = true;
-				break;
-			}
-		}
 		this.lastShadowValue = world.getShadowsAt(this.location);
 
 		Vector2 relVelocity = this.velocity.rotate(new Vector2(), this.relative_direction);
@@ -466,7 +478,7 @@ public class AgentLife extends Agent {
 		inputs[index++] = world.getChemicalAt(location);
 		inputs[index++] = 1 / (1 + relVelocity.x);
 		inputs[index++] = 1 / (1 + relVelocity.y);
-		inputs[index++] = (this.getMaturity() / 2.0);
+		inputs[index++] = (this.structure.getSumDevelopmentOfGrownCells() / this.structure.getStructure().size());
 		inputs[index++] = 1.0 / (1 + this.getEnergy());
 		inputs[index++] = 1.0 / (1 + lastNearbyEntities.size());
 		inputs[index++] = relativeAngleTo(Math.PI / 2, relative_direction); // to light is just their direction relative to up
@@ -475,23 +487,21 @@ public class AgentLife extends Agent {
 		inputs[index++] = 1.0 / (1 + getTicksSinceLastHurt()); // hurting
 		inputs[index++] = isAttacking ? 1 : 0; // hurting
 
-		// float[] sumOfNearbyHormones = new float[this.sensorHormones.length];
-		//
-		// int foundHormones = 0;
-		// for(NearbyEntry near : this.lastNearbyEntities) {
-		// if(near != null && near.entity != null && near.entity.sensorHormones != null) {
-		//
-		// for(int i = 0; i < sumOfNearbyHormones.length; i++) {
-		// double dist = near.entity.location.distanceToRaw(this.location);
-		// sumOfNearbyHormones[i] += near.entity.sensorHormones[i] / (1 + dist);
-		// }
-		//
-		// }
-		// }
-		//
-		// for(int i = 0; i < sensorHormones.length; i++) {
-		// inputs[index++] = sensorHormones[i];
-		// }
+		float[] sumOfNearbyHormones = new float[this.sensorHormones.length];
+		for(NearbyEntry near : this.lastNearbyEntities) {
+			if(near != null && near.entity != null && near.entity.sensorHormones != null && near.entity != this) {
+
+				for(int i = 0; i < sumOfNearbyHormones.length; i++) {
+					double dist = near.entity.location.distanceToRaw(this.location);
+					sumOfNearbyHormones[i] += near.entity.sensorHormones[i] / (1 + dist);
+				}
+
+			}
+		}
+
+		for(int i = 0; i < sensorHormones.length; i++) {
+			inputs[index++] = sensorHormones[i];
+		}
 
 		// send inputs to brain
 		brain.setInputs(inputs);
@@ -651,9 +661,11 @@ public class AgentLife extends Agent {
 	private double lastShadowValue;
 
 	@Override
-	protected void photosynthesis() {
+	protected double photosynthesis() {
+		if(!wantsToPhotosynthesize || !this.structure.hasType(Structure.PHOTO))
+			return 0;
 		if(lastNearbyEntities == null)
-			return;
+			return 0;
 		int nearbySize = 0;
 		for(NearbyEntry ne : lastNearbyEntities)
 			if(ne.getKey().isAgent() && ne.getKey().getLocation().distanceToSq(this.location) < sight_range &&
@@ -665,7 +677,7 @@ public class AgentLife extends Agent {
 		double competition = Math.max(0, Math.min(1, (1.0 / (1 + Math.pow(nearbySize, 2))))); // nearby agents reduce light for this agent
 		this.lastLightExposure = (float) intensity;
 
-		double gain = 100 * intensity * currentMetabolism;
+		double gain = 500 * intensity * currentMetabolism;
 		gain *= competition;
 		// gain *= world.getSkillFactor();
 
@@ -675,21 +687,25 @@ public class AgentLife extends Agent {
 		world.totalLightGained += gain;
 		addEnergy(gain);
 		sunGained += gain;
+
+		return gain;
 	}
 
-	protected void chemosynthesis() {
+	protected double chemosynthesis() {
+		if(!wantsToChemosynthesize || !this.structure.hasType(Structure.CHEMO))
+			return 0;
 		if(lastNearbyEntities == null)
-			return;
+			return 0;
 
 		int nearbySize = 0;
 		for(NearbyEntry ne : lastNearbyEntities)
 			if(ne.getKey().isAgent() && ne.getKey().getLocation().distanceToSq(this.location) < sight_range &&
 					((Agent) ne.getKey()).wantsToChemosynthesize && ((Agent) ne.getKey()).getStructure().hasDevelopedCellsOf(Structure.CHEMO))
 				nearbySize++;
-		double competition = Math.max(0, Math.min(1, (1.0 / (1 + Math.pow(nearbySize, 2))))); // nearby agents reduce light for this agent
+		double competition = Math.max(0, Math.min(1, (1.0 / (1 + Math.pow(nearbySize*2, 2))))); // nearby agents reduce light for this agent
 		double intensity = getChemsReceived();
 
-		double gain = 50 * intensity * currentMetabolism;
+		double gain = 500 * intensity * currentMetabolism;
 		gain *= competition;
 		// gain *= world.getSkillFactor();
 
@@ -701,6 +717,7 @@ public class AgentLife extends Agent {
 		chemGained += gain;
 		this.lastChemicalExposure = (float) getChemsReceived();
 
+		return gain;
 	}
 
 	private double getLightReceived() {
@@ -760,20 +777,37 @@ public class AgentLife extends Agent {
 				0.05 * geneMultiplier, // delete conn
 				0.02 * geneMultiplier, // new node
 				0.02 * geneMultiplier, // del node
-				new AsexualReproductionRandomizer(0.1 * geneMultiplier, 0.1 * geneFactor),
+				new AsexualReproductionRandomizer(0.1 * geneMultiplier, 1 * geneFactor),
 				0.1 * geneFactor, // activation magnitude
 				0.05 * geneMultiplier, // activation chance
 				0.2 * geneMultiplier); // activation value change
+		brain.randomizeWeights(new AsexualReproductionRandomizer(1.0, 0.01 * geneFactor)); // every weight changes slightly
+
 		brain.getPhenotype().mutate(0.15 * geneMultiplier);
 
-		this.bodyDNA = mutateBodyDNA(this.bodyDNA,
-				0.01 * geneMultiplier, // node type chance
-				0.02 * geneMultiplier, // direction add chance
-				0.03 * geneMultiplier, // direction del
-				0.01 * geneMultiplier, // node copy
-				0.02 * geneMultiplier, // node delete
-				0.01 * geneMultiplier, // angle
-				0.05 * geneMultiplier); // swap chance
+		if(getGeneDNA().split("\\.").length == 1) {
+
+			this.bodyDNA = mutateBodyDNA(this.bodyDNA,
+					0.00 * geneMultiplier, // node type chance
+					0.00 * geneMultiplier, // direction add chance
+					0.00 * geneMultiplier, // direction del
+					0.00 * geneMultiplier, // node copy
+					0.00 * geneMultiplier, // node delete
+					1, // node add
+					0.00 * geneMultiplier, // angle
+					0.05 * geneMultiplier); // swap chance
+		}
+		else {
+			this.bodyDNA = mutateBodyDNA(this.bodyDNA,
+					0.03 * geneMultiplier, // node type chance
+					0.02 * geneMultiplier, // direction add chance
+					0.03 * geneMultiplier, // direction del
+					0.05 * geneMultiplier, // node copy
+					0.01 * geneMultiplier, // node delete
+					0.05 * geneMultiplier, // node add
+					0.01 * geneMultiplier, // angle
+					0.05 * geneMultiplier); // swap chance
+		}
 
 		// if(random.nextDouble() < rate)
 		// brain.mutateNeuronsLimited(1, 1, 3, 0, 0, 0, 0);

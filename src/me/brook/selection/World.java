@@ -163,8 +163,6 @@ public class World {
 			speciesManager = new SpeciesManager<Agent>(1, 10, agent);
 			speciesManager.fillAllWithReps(minimumPopulation, true, 1);
 			speciesManager.getAllGeneticCarriers().forEach(e -> addEntity(e));
-
-			randomizePhenotypes();
 		}
 
 		// speciesManager.applyRandomizerToAll(new BoundedRandomizer(5));
@@ -198,7 +196,7 @@ public class World {
 
 			for(Agent e : sp) {
 
-				configureAgent(e, index);
+				configureNewAgent(e, index);
 				index++;
 			}
 
@@ -211,30 +209,11 @@ public class World {
 		// dyn4.setGravity(0, -9.8);
 	}
 
-	private void randomizePhenotypes() {
-		for(Agent agent : this.speciesManager.getAllGeneticCarriers()) {
-			agent.getBrain().getPhenotype().getPhenotype("pref_diet").shuffle();
-			agent.getBrain().getPhenotype().getPhenotype("hue").shuffle();
-			agent.getBrain().getPhenotype().getPhenotype("metabolism").shuffle();
-			agent.getBrain().getPhenotype().getPhenotype("density").shuffle();
-		}
-	}
-
 	private Agent createDefaultAgent() {
 		double size = 10;
 
 		Agent agent = new AgentLife(this, null, Color.BLUE, 4, size, new Vector2(), true);
-		agent.getBrain().getPhenotype().addPhenotype("pref_diet", new Pheno(0, 0.2, -1, 1));
-		agent.getBrain().getPhenotype().addPhenotype("child_portion", new Pheno(0.7, 0.2, 0.1, 0.8));
-
-		agent.getBrain().getPhenotype().addPhenotype("hue", new Pheno(.05, 0.05, 0, 1, true));
-		agent.getBrain().getPhenotype().addPhenotype("metabolism", new Pheno(0.5, 0.05, 0.2, 2, false));
-		agent.getBrain().getPhenotype().addPhenotype("density", new Pheno(1.5, 0.1, 1, 2, false));
-		agent.getBrain().getPhenotype().addPhenotype("speed", new Pheno(1.5, 0.1, 1, 10, false));
-
-		agent.getBrain().getPhenotype().addPhenotype("geneMultiplier", new Pheno(1.0, 0.5, 0.0001, 1000, false));
-		agent.getBrain().getPhenotype().addPhenotype("geneFactor", new Pheno(1, 0.5, 0.0001, 1000, false));
-		agent.adjustForPhenotype();
+		agent.reset();
 		agent.setActive(true);
 
 		return agent;
@@ -250,9 +229,13 @@ public class World {
 
 		// System.out.println(skillFactor);
 	}
+	
+	public boolean isWaitingForResults() {
+		return updateResults != null && !areResultsReady();
+	}
 
-	public boolean update() throws InterruptedException {
-		if(updateResults != null && !areResultsReady())
+	public boolean update() {
+		if(isWaitingForResults())
 			return false;
 		
 		lastLivingPopulation = calculateLivingPopulation();
@@ -611,6 +594,7 @@ public class World {
 		this.cursorEntity = location.copy();
 
 		System.out.println(String.format("Shadows: %s, Light: %s, Chems: %s", getShadowsAt(location), getLightAt(location), getChemicalAt(location)));
+		System.out.println("InCave: " + borders.isInCave(location));
 	}
 
 	public boolean isNearPredator(Vector2 loc, int range) {
@@ -700,10 +684,11 @@ public class World {
 		return entities.size();
 	}
 
-	private void configureAgent(Agent agent, float position) {
+	private void configureNewAgent(Agent agent, float position) {
+		agent.setBrain(agent.createBrain());
+		agent.mutate(1);
 		agent.reset();
 		agent.init();
-//		agent.shuffleDNA(10);
 
 		if(!wasLoadedFromSave) {
 			double x = (int) (((random.nextDouble() * 2 - 1) * (worldWidth)));
@@ -735,6 +720,8 @@ public class World {
 	}
 
 	// public static FSTConfiguration fstConf = FSTConfiguration.createDefaultConfiguration();
+	
+	public boolean isSaving = false;
 
 	public void save(boolean autosave) {
 
@@ -747,6 +734,7 @@ public class World {
 				continue;
 			}
 		}
+		isSaving = true;
 
 		// create new list to avoid thread nonsense
 		File parent = new File(engine.getSaveLocationPath());
@@ -856,6 +844,7 @@ public class World {
 			e1.printStackTrace();
 		}
 
+		isSaving = false;
 	}
 
 	private void loadWorldSave(String path) {
@@ -1068,7 +1057,7 @@ public class World {
 		Agent nextAgent = createDefaultAgent();
 		nextAgent.mutate(1);
 		addEntity(nextAgent);
-		configureAgent(nextAgent, 0);
+		configureNewAgent(nextAgent, 0);
 
 		speciesManager.distributeOrMakeNewSpecies(Arrays.asList(nextAgent));
 
@@ -1174,23 +1163,33 @@ public class World {
 	}
 
 	public double getLightAt(Vector2 location) {
-		Rectangle2D bounds = borders.getBounds2D();
-		double yValue = Math.abs(location.y - bounds.getMaxY()) / (bounds.getHeight());
-		yValue = Math.max(0, Math.min(1, 1 - yValue));
+		if(borders.isInCave(location)) {
+			return 0;
+		}
+		
+//		Rectangle2D bounds = borders.getBounds2D();
+//		double yValue = Math.abs(location.y - bounds.getMaxY()) / (bounds.getHeight());
+//		yValue = Math.max(0, Math.min(1, 1 - yValue));
+//
+//		double lightLevels = Math.pow(yValue, 1);
+//		lightLevels = Math.max(0, Math.min(1, lightLevels));
+		
 
-		double lightLevels = Math.pow(yValue, 1);
-		lightLevels = Math.max(0, Math.min(1, lightLevels));
-
-		return lightLevels * getDaytimeLightFactor();
+		return 1 * getDaytimeLightFactor();
 	}
 
 	public double getChemicalAt(Vector2 location) {
+		
 		Rectangle2D bounds = borders.getBounds2D();
 		double yValue = Math.abs(location.y - bounds.getMaxY()) / (bounds.getHeight());
 		yValue = Math.max(0, Math.min(1, yValue));
 
-		double chemicalLevels = Math.pow(yValue, 7);
+		double chemicalLevels = Math.pow(yValue, 8);
 		chemicalLevels = Math.max(0, Math.min(1, chemicalLevels));
+		
+		if(borders.isInCave(location)) {
+			chemicalLevels += 0.5;
+		}
 
 		return chemicalLevels;
 	}
@@ -1276,7 +1275,7 @@ public class World {
 
 	public double getDaytimeLightFactor() {
 		// sun intensity is equal to cos the elevation angle. elevation angle is the angle from the horizon
-		return Math.max(0.0, Math.cos(angleOfSun - Math.PI / 2)); // minimum sun of 0
+		return 1;//Math.max(0.0, Math.cos(angleOfSun - Math.PI / 2)); // minimum sun of 0
 	}
 
 	public double getAngleOfSun() {

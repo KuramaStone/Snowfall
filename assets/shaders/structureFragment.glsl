@@ -219,14 +219,6 @@ void main() {
 	}
 
 	vec4 finalColor = vec4(0);
-	for (int i = 0; i < totalPos; i++) {
-		if (heatArray[i] == 0)
-			break;
-		finalColor += colorArray[i] * pow((heatArray[i]) / totalHeat, 3) / 2;
-	}
-	finalColor.xyz = rgb2hsv(finalColor.xyz);
-	finalColor.z = 1;
-	finalColor.xyz = hsv2rgb(finalColor.xyz);
 	finalColor = closestColor;
 
 	float alpha = 1; //;
